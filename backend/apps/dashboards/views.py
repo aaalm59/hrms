@@ -95,7 +95,7 @@ class EmployeeDashboardView(APIView):
         from apps.leaves.models import LeaveBalance, LeaveRequest
         from apps.payroll.models import Payslip
 
-        employee = request.user.employee_profile
+        employee = getattr(request.user, 'employee_profile', None)
         if not employee:
             return Response({})
 

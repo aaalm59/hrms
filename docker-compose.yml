@@ -8,15 +8,13 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hrms_db}
       POSTGRES_USER: ${POSTGRES_USER:-hrms_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrms_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrms_pass123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - hrms_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms_user} -d ${POSTGRES_DB:-hrms_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,8 +23,6 @@ services:
     image: redis:7-alpine
     container_name: hrms_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     networks:
       - hrms_net
     healthcheck:
@@ -57,6 +53,12 @@ services:
         condition: service_healthy
     networks:
       - hrms_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
@@ -69,14 +71,18 @@ services:
     container_name: hrms_celery_worker
     restart: unless-stopped
     env_file: .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.development
     volumes:
       - ./backend:/app
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - hrms_net
-    command: celery -A config.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A config.celery_app worker --loglevel=info --concurrency=4 -E
 
   celery_beat:
     build:
@@ -85,11 +91,15 @@ services:
     container_name: hrms_celery_beat
     restart: unless-stopped
     env_file: .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.development
     volumes:
       - ./backend:/app
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - hrms_net
     command: celery -A config.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
