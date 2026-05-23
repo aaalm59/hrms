@@ -28,11 +28,18 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Attendance.objects.filter(company=self.request.user.company).select_related("employee", "shift")
         date = self.request.query_params.get("date")
-        employee_id = self.request.query_params.get("employee_id")
+        employee_id = self.request.query_params.get("employee_id") or self.request.query_params.get("employee")
+        month = self.request.query_params.get("month")  # format: YYYY-MM
         if date:
             qs = qs.filter(date=date)
         if employee_id:
             qs = qs.filter(employee_id=employee_id)
+        if month:
+            try:
+                year, mon = month.split("-")
+                qs = qs.filter(date__year=int(year), date__month=int(mon))
+            except (ValueError, AttributeError):
+                pass
         return qs
 
     def perform_create(self, serializer):
@@ -84,3 +91,86 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             "wfh": qs.filter(status=Attendance.Status.WORK_FROM_HOME).count(),
             "half_day": qs.filter(status=Attendance.Status.HALF_DAY).count(),
         })
+
+    @action(detail=False, methods=["post"])
+    def regularize(self, request):
+        """Submit attendance regularization request for a given date."""
+        from datetime import datetime
+        employee = request.user.employee_profile
+        date_str = request.data.get("date")
+        reason = request.data.get("reason", "")
+        check_in_time = request.data.get("check_in_time")
+        check_out_time = request.data.get("check_out_time")
+
+        if not date_str or not reason:
+            return Response({"detail": "date and reason are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from datetime import date as date_type
+            att_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({"detail": "Invalid date format."}, status=status.HTTP_400_BAD_REQUEST)
+
+        attendance, _ = Attendance.objects.get_or_create(
+            company=request.user.company,
+            employee=employee,
+            date=att_date,
+            defaults={"status": Attendance.Status.ABSENT},
+        )
+
+        # Update requested times on the attendance record
+        if check_in_time:
+            try:
+                t = datetime.strptime(check_in_time, "%H:%M").time()
+                from datetime import datetime as dt, timezone as tz_module
+                attendance.check_in = dt.combine(att_date, t).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+        if check_out_time:
+            try:
+                t = datetime.strptime(check_out_time, "%H:%M").time()
+                attendance.check_out = dt.combine(att_date, t).replace(tzinfo=timezone.get_current_timezone())
+            except ValueError:
+                pass
+        attendance.save()
+
+        # Create or update regularization request
+        reg, created = AttendanceRegularization.objects.update_or_create(
+            company=request.user.company,
+            attendance=attendance,
+            defaults={"employee": employee, "reason": reason, "status": "pending"},
+        )
+        serializer = AttendanceRegularizationSerializer(reg)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class AttendanceRegularizationViewSet(viewsets.ModelViewSet):
+    serializer_class = AttendanceRegularizationSerializer
+    permission_classes = [IsManager]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = AttendanceRegularization.objects.filter(company=user.company).select_related("employee", "attendance")
+        if not (user.is_super_admin or user.has_role("hr_admin") or user.has_role("manager")):
+            qs = qs.filter(employee__user=user)
+        return qs
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHRAdmin])
+    def approve(self, request, pk=None):
+        reg = self.get_object()
+        reg.status = "approved"
+        reg.approved_by = request.user
+        reg.approved_at = timezone.now()
+        reg.save()
+        reg.attendance.status = Attendance.Status.REGULARIZED
+        reg.attendance.save()
+        return Response({"detail": "Regularization approved."})
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHRAdmin])
+    def reject(self, request, pk=None):
+        reg = self.get_object()
+        reg.status = "rejected"
+        reg.approved_by = request.user
+        reg.approved_at = timezone.now()
+        reg.save()
+        return Response({"detail": "Regularization rejected."})

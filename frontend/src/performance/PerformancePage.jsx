@@ -73,6 +73,10 @@ function AddGoalModal({ cycles, onClose }) {
             <input {...register("title", { required: true })} className="input" placeholder="e.g. Complete React certification" />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Target / Success Criteria *</label>
+            <input {...register("target", { required: true })} className="input" placeholder="e.g. Get certified by Q3" />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea {...register("description")} className="input h-20 resize-none" placeholder="Goal details..." />
           </div>
@@ -125,12 +129,12 @@ function ReviewCard({ review }) {
             <StarRating value={review.manager_rating} />
           </div>
         )}
-        {review.overall_rating && (
+        {review.final_rating && (
           <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-xl">
             <Award className="w-4 h-4 text-yellow-600" />
             <div>
-              <p className="text-xs text-gray-600">Overall Rating</p>
-              <p className="font-bold text-yellow-700">{review.overall_rating}/5</p>
+              <p className="text-xs text-gray-600">Final Rating</p>
+              <p className="font-bold text-yellow-700">{review.final_rating}/5</p>
             </div>
           </div>
         )}
@@ -152,7 +156,7 @@ export default function PerformancePage() {
 
   const { data: cycles } = useQuery({
     queryKey: ["appraisal-cycles"],
-    queryFn: () => api.get("/performance/appraisal-cycles/").then((r) => r.data?.results ?? r.data),
+    queryFn: () => api.get("/performance/cycles/").then((r) => r.data?.results ?? r.data),
   });
 
   const { data: myGoals } = useQuery({
@@ -166,11 +170,12 @@ export default function PerformancePage() {
     enabled: tab === "reviews",
   });
 
+  const qc = useQueryClient();
   const updateGoalStatus = useMutation({
     mutationFn: ({ id, status }) => api.patch(`/performance/goals/${id}/`, { status }),
     onSuccess: () => {
       toast.success("Goal updated");
-      useQueryClient().invalidateQueries(["my-goals"]);
+      qc.invalidateQueries(["my-goals"]);
     },
   });
 

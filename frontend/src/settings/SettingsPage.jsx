@@ -14,14 +14,15 @@ import { useForm } from "react-hook-form";
 function LeaveTypeModal({ existing, onClose }) {
   const qc = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm({
-    defaultValues: existing ?? { is_paid: true, max_days_per_year: 12, carry_forward: false },
+    defaultValues: existing ?? { is_paid: true, days_per_year: 12, is_carry_forwardable: false },
   });
 
   const mutation = useMutation({
-    mutationFn: (d) => existing ? api.patch(`/leaves/leave-types/${existing.id}/`, d) : api.post("/leaves/leave-types/", d),
+    mutationFn: (d) => existing ? api.patch(`/leaves/types/${existing.id}/`, d) : api.post("/leaves/types/", d),
     onSuccess: () => {
       toast.success(existing ? "Leave type updated" : "Leave type created");
       qc.invalidateQueries(["leave-types-admin"]);
+      qc.invalidateQueries(["leave-types"]);
       onClose();
     },
     onError: (err) => toast.error(err.response?.data?.detail || "Failed"),
@@ -45,12 +46,12 @@ function LeaveTypeModal({ existing, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Days/Year</label>
-              <input type="number" {...register("max_days_per_year")} className="input" min={0} />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Days/Year</label>
+              <input type="number" {...register("days_per_year")} className="input" min={0} step="0.5" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carry Forward Days</label>
-              <input type="number" {...register("carry_forward_days")} className="input" min={0} defaultValue={0} />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Max Carry Fwd Days</label>
+              <input type="number" {...register("max_carry_forward_days")} className="input" min={0} defaultValue={0} />
             </div>
           </div>
           <div className="flex gap-6">
@@ -59,14 +60,14 @@ function LeaveTypeModal({ existing, onClose }) {
               <span className="text-sm text-gray-700">Paid Leave</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" {...register("carry_forward")} className="w-4 h-4 text-primary-600 rounded" />
+              <input type="checkbox" {...register("is_carry_forwardable")} className="w-4 h-4 text-primary-600 rounded" />
               <span className="text-sm text-gray-700">Allow Carry Forward</span>
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Applicable Gender</label>
-            <select {...register("applicable_gender")} className="input">
-              <option value="">All</option>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gender Specific</label>
+            <select {...register("gender_specific")} className="input">
+              <option value="">All Genders</option>
               <option value="male">Male Only</option>
               <option value="female">Female Only</option>
             </select>
@@ -86,7 +87,7 @@ function LeaveTypeModal({ existing, onClose }) {
 function ShiftModal({ existing, onClose }) {
   const qc = useQueryClient();
   const { register, handleSubmit } = useForm({
-    defaultValues: existing ?? { start_time: "09:00", end_time: "18:00", grace_period_minutes: 15 },
+    defaultValues: existing ?? { start_time: "09:00", end_time: "18:00", grace_minutes: 15, break_minutes: 60 },
   });
 
   const mutation = useMutation({
@@ -124,17 +125,13 @@ function ShiftModal({ existing, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Grace Period (mins)</label>
-              <input type="number" {...register("grace_period_minutes")} className="input" min={0} />
+              <input type="number" {...register("grace_minutes")} className="input" min={0} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Break Duration (mins)</label>
-              <input type="number" {...register("break_duration_minutes")} className="input" min={0} />
+              <input type="number" {...register("break_minutes")} className="input" min={0} />
             </div>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" {...register("is_default")} className="w-4 h-4 text-primary-600 rounded" />
-            <span className="text-sm text-gray-700">Set as Default Shift</span>
-          </label>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={mutation.isPending} className="btn-primary flex-1">
@@ -211,7 +208,7 @@ export default function SettingsPage() {
 
   const { data: leaveTypes } = useQuery({
     queryKey: ["leave-types-admin"],
-    queryFn: () => api.get("/leaves/leave-types/").then((r) => r.data?.results ?? r.data),
+    queryFn: () => api.get("/leaves/types/").then((r) => r.data?.results ?? r.data),
     enabled: tab === "leave-types",
   });
 
@@ -277,7 +274,7 @@ export default function SettingsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {["Name", "Code", "Max Days", "Paid", "Carry Fwd", "Gender", ""].map((h) => (
+                    {["Name", "Code", "Days/Year", "Paid", "Carry Fwd", "Gender", ""].map((h) => (
                       <th key={h} className="text-left px-4 py-3 font-medium text-gray-600">{h}</th>
                     ))}
                   </tr>
@@ -290,12 +287,14 @@ export default function SettingsPage() {
                       <tr key={lt.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium text-gray-900">{lt.name}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-500">{lt.code}</td>
-                        <td className="px-4 py-3 text-gray-600">{lt.max_days_per_year}</td>
+                        <td className="px-4 py-3 text-gray-600">{lt.days_per_year}</td>
                         <td className="px-4 py-3">
                           {lt.is_paid ? <span className="badge-active">Yes</span> : <span className="badge-inactive">No</span>}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{lt.carry_forward_days ?? 0}</td>
-                        <td className="px-4 py-3 text-gray-500 capitalize">{lt.applicable_gender || "All"}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {lt.is_carry_forwardable ? `${lt.max_carry_forward_days ?? 0}d` : "No"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 capitalize">{lt.gender_specific || "All"}</td>
                         <td className="px-4 py-3">
                           <button onClick={() => { setEditItem(lt); setShowLeaveModal(true); }} className="text-xs text-primary-600 hover:underline">Edit</button>
                         </td>
@@ -319,7 +318,7 @@ export default function SettingsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {["Name", "Start", "End", "Grace (mins)", "Default", ""].map((h) => (
+                    {["Name", "Start", "End", "Grace (mins)", "Break (mins)", ""].map((h) => (
                       <th key={h} className="text-left px-4 py-3 font-medium text-gray-600">{h}</th>
                     ))}
                   </tr>
@@ -333,10 +332,8 @@ export default function SettingsPage() {
                         <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.start_time?.slice(0, 5)}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.end_time?.slice(0, 5)}</td>
-                        <td className="px-4 py-3 text-gray-600">{s.grace_period_minutes}</td>
-                        <td className="px-4 py-3">
-                          {s.is_default ? <span className="badge-active">Yes</span> : <span className="badge-inactive">No</span>}
-                        </td>
+                        <td className="px-4 py-3 text-gray-600">{s.grace_minutes}</td>
+                        <td className="px-4 py-3 text-gray-600">{s.break_minutes}</td>
                         <td className="px-4 py-3">
                           <button onClick={() => { setEditItem(s); setShowShiftModal(true); }} className="text-xs text-primary-600 hover:underline">Edit</button>
                         </td>

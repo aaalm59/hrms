@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Calendar, Plus, Search, Check, X, Clock, ArrowUpRight, ChevronDown
+  Calendar, Plus, Search, Check, X, Clock
 } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import api from "@/services/api";
@@ -21,19 +21,25 @@ const STATUS_BADGE = {
 function ApplyLeaveModal({ onClose, leaveTypes }) {
   const qc = useQueryClient();
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
-  const start = watch("start_date");
-  const end = watch("end_date");
-  const days = start && end ? Math.max(0, differenceInCalendarDays(parseISO(end), parseISO(start)) + 1) : 0;
+  const fromDate = watch("from_date");
+  const toDate = watch("to_date");
+  const days = fromDate && toDate
+    ? Math.max(0, differenceInCalendarDays(parseISO(toDate), parseISO(fromDate)) + 1)
+    : 0;
 
   const mutation = useMutation({
-    mutationFn: (d) => api.post("/leaves/leave-requests/", d),
+    mutationFn: (d) => api.post("/leaves/", d),
     onSuccess: () => {
       toast.success("Leave request submitted");
       qc.invalidateQueries(["my-leave-requests"]);
       qc.invalidateQueries(["leave-balances"]);
       onClose();
     },
-    onError: (err) => toast.error(err.response?.data?.detail || "Submission failed"),
+    onError: (err) => {
+      const data = err.response?.data;
+      const msg = typeof data === "object" ? Object.values(data).flat().join(", ") : "Submission failed";
+      toast.error(msg);
+    },
   });
 
   return (
@@ -47,7 +53,7 @@ function ApplyLeaveModal({ onClose, leaveTypes }) {
         </div>
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Leave Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Leave Type *</label>
             <select {...register("leave_type", { required: true })} className="input">
               <option value="">Select leave type...</option>
               {leaveTypes?.map((lt) => (
@@ -58,33 +64,34 @@ function ApplyLeaveModal({ onClose, leaveTypes }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-              <input type="date" {...register("start_date", { required: true })} className="input" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">From *</label>
+              <input type="date" {...register("from_date", { required: true })} className="input" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-              <input type="date" {...register("end_date", { required: true })} className="input" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">To *</label>
+              <input type="date" {...register("to_date", { required: true })} className="input" />
             </div>
           </div>
           {days > 0 && (
             <p className="text-sm text-primary-600 font-medium">{days} day{days > 1 ? "s" : ""} selected</p>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Half Day</label>
-            <select {...register("half_day")} className="input">
-              <option value="">No (Full Day)</option>
-              <option value="first_half">First Half</option>
-              <option value="second_half">Second Half</option>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Day Type</label>
+            <select {...register("day_type")} className="input">
+              <option value="full_day">Full Day</option>
+              <option value="half_day">Half Day</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason *</label>
             <textarea
               {...register("reason", { required: true })}
               className="input h-20 resize-none"
               placeholder="Reason for leave..."
             />
+            {errors.reason && <p className="text-red-500 text-xs mt-1">Required</p>}
           </div>
+          {/* total_days is computed in backend but we send it for display */}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={mutation.isPending} className="btn-primary flex-1">
@@ -102,10 +109,12 @@ function LeaveReviewModal({ request, onClose }) {
   const [remarks, setRemarks] = useState("");
 
   const review = useMutation({
-    mutationFn: ({ action }) => api.post(`/leaves/leave-requests/${request.id}/review/`, { action, remarks }),
+    mutationFn: ({ action }) =>
+      api.post(`/leaves/${request.id}/review/`, { action, comment: remarks }),
     onSuccess: (_, { action }) => {
       toast.success(`Leave ${action}d`);
       qc.invalidateQueries(["team-leave-requests"]);
+      qc.invalidateQueries(["my-leave-requests"]);
       onClose();
     },
     onError: (err) => toast.error(err.response?.data?.detail || "Review failed"),
@@ -122,7 +131,10 @@ function LeaveReviewModal({ request, onClose }) {
           <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
             <p><span className="text-gray-500">Employee:</span> <span className="font-medium">{request.employee_name}</span></p>
             <p><span className="text-gray-500">Type:</span> <span className="font-medium">{request.leave_type_name}</span></p>
-            <p><span className="text-gray-500">Duration:</span> <span className="font-medium">{request.start_date} → {request.end_date} ({request.total_days} days)</span></p>
+            <p><span className="text-gray-500">Duration:</span> <span className="font-medium">
+              {request.from_date} → {request.to_date} ({request.total_days} days)
+            </span></p>
+            <p><span className="text-gray-500">Day Type:</span> <span className="font-medium capitalize">{request.day_type?.replace("_", " ")}</span></p>
             <p><span className="text-gray-500">Reason:</span> <span className="font-medium">{request.reason}</span></p>
           </div>
           <div>
@@ -166,35 +178,28 @@ export default function LeavesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  // Correct URLs: /leaves/types/, /leaves/balances/, /leaves/
   const { data: leaveTypes } = useQuery({
     queryKey: ["leave-types"],
-    queryFn: () => api.get("/leaves/leave-types/").then((r) => r.data?.results ?? r.data),
+    queryFn: () => api.get("/leaves/types/").then((r) => r.data?.results ?? r.data),
   });
 
   const { data: balances } = useQuery({
     queryKey: ["leave-balances"],
-    queryFn: () => api.get("/leaves/leave-balances/").then((r) => r.data?.results ?? r.data),
+    queryFn: () => api.get("/leaves/balances/").then((r) => r.data?.results ?? r.data),
   });
 
   const { data: myRequests } = useQuery({
     queryKey: ["my-leave-requests", statusFilter],
     queryFn: () =>
-      api.get(`/leaves/leave-requests/?${statusFilter ? `status=${statusFilter}&` : ""}ordering=-applied_on`).then((r) => r.data),
+      api.get(`/leaves/?${statusFilter ? `status=${statusFilter}&` : ""}ordering=-created_at`).then((r) => r.data),
   });
 
   const { data: teamRequests } = useQuery({
     queryKey: ["team-leave-requests", search, statusFilter],
     queryFn: () =>
-      api.get(`/leaves/leave-requests/?search=${search}&${statusFilter ? `status=${statusFilter}&` : ""}ordering=-applied_on`).then((r) => r.data),
+      api.get(`/leaves/?search=${search}&${statusFilter ? `status=${statusFilter}&` : ""}ordering=-created_at`).then((r) => r.data),
     enabled: isHR && tab === "team",
-  });
-
-  const cancelLeave = useMutation({
-    mutationFn: (id) => api.post(`/leaves/leave-requests/${id}/review/`, { action: "cancel" }),
-    onSuccess: () => {
-      toast.success("Leave cancelled");
-      useQueryClient().invalidateQueries(["my-leave-requests"]);
-    },
   });
 
   const requests = tab === "my" ? myRequests?.results ?? [] : teamRequests?.results ?? [];
@@ -214,23 +219,22 @@ export default function LeavesPage() {
       {/* Leave Balance Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {balances?.map((b) => {
-          const remaining = (b.total_days - b.used_days).toFixed(1);
-          const pct = b.total_days > 0 ? ((b.total_days - b.used_days) / b.total_days) * 100 : 0;
+          const remaining = parseFloat(b.total_days) - parseFloat(b.used_days);
+          const pct = parseFloat(b.total_days) > 0 ? (remaining / parseFloat(b.total_days)) * 100 : 0;
           return (
             <div key={b.id} className="card">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-gray-700">{b.leave_type_name}</p>
                 <span className="text-xs text-gray-400">{format(new Date(), "yyyy")}</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{remaining}</p>
+              <p className="text-2xl font-bold text-gray-900">{remaining.toFixed(1)}</p>
               <p className="text-xs text-gray-500 mb-2">of {b.total_days} days remaining</p>
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary-500 rounded-full"
-                  style={{ width: `${Math.min(100, pct)}%` }}
-                />
+                <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
               </div>
-              <p className="text-xs text-gray-400 mt-1">{b.used_days} used · {b.carry_forward ?? 0} carried</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {b.used_days} used · {b.carried_forward ?? 0} carried fwd
+              </p>
             </div>
           );
         })}
@@ -288,7 +292,7 @@ export default function LeavesPage() {
               <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Duration</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Days</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Reason</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Day Type</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Applied On</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
               {isHR && tab === "team" && <th className="text-left px-4 py-3 font-medium text-gray-600">Action</th>}
@@ -303,16 +307,16 @@ export default function LeavesPage() {
                   {tab === "team" && (
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{req.employee_name}</p>
-                      <p className="text-xs text-gray-400">{req.employee_id}</p>
                     </td>
                   )}
                   <td className="px-4 py-3 font-medium text-gray-800">{req.leave_type_name}</td>
                   <td className="px-4 py-3 text-gray-600 text-xs">
-                    {req.start_date} → {req.end_date}
-                    {req.half_day && <span className="ml-1 text-orange-600">({req.half_day.replace("_", " ")})</span>}
+                    {req.from_date} → {req.to_date}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{req.total_days}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[150px] truncate">{req.reason || "—"}</td>
+                  <td className="px-4 py-3 text-gray-500 capitalize text-xs">
+                    {req.day_type?.replace("_", " ") || "Full Day"}
+                  </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {req.applied_on ? format(parseISO(req.applied_on), "dd MMM yyyy") : "—"}
                   </td>

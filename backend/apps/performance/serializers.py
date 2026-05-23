@@ -10,6 +10,7 @@ class AppraisalCycleSerializer(serializers.ModelSerializer):
 
 class GoalSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    appraisal_cycle_name = serializers.CharField(source="appraisal_cycle.name", read_only=True)
 
     class Meta:
         model = Goal
@@ -20,6 +21,7 @@ class GoalSerializer(serializers.ModelSerializer):
 class PerformanceReviewSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     reviewer_name = serializers.CharField(source="reviewer.get_full_name", read_only=True)
+    appraisal_cycle_name = serializers.CharField(source="appraisal_cycle.name", read_only=True)
 
     class Meta:
         model = PerformanceReview

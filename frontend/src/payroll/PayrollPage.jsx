@@ -39,10 +39,10 @@ function PayslipViewModal({ payslip, onClose }) {
               <TrendingUp className="w-4 h-4 text-green-600" /> Earnings
             </h3>
             <div className="space-y-2">
-              {payslip.earnings?.map((e, i) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <span className="text-gray-600">{e.component}</span>
-                  <span className="font-medium text-gray-900">₹{Number(e.amount).toLocaleString()}</span>
+              {Object.entries(payslip.earnings ?? {}).map(([name, amount]) => (
+                <div key={name} className="flex justify-between text-sm">
+                  <span className="text-gray-600">{name}</span>
+                  <span className="font-medium text-gray-900">₹{Number(amount).toLocaleString()}</span>
                 </div>
               ))}
               <div className="flex justify-between text-sm font-semibold border-t border-gray-100 pt-2 mt-2">
@@ -58,10 +58,10 @@ function PayslipViewModal({ payslip, onClose }) {
               <AlertCircle className="w-4 h-4 text-red-500" /> Deductions
             </h3>
             <div className="space-y-2">
-              {payslip.deductions?.map((d, i) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <span className="text-gray-600">{d.component}</span>
-                  <span className="font-medium text-red-600">-₹{Number(d.amount).toLocaleString()}</span>
+              {Object.entries(payslip.deductions ?? {}).map(([name, amount]) => (
+                <div key={name} className="flex justify-between text-sm">
+                  <span className="text-gray-600">{name}</span>
+                  <span className="font-medium text-red-600">-₹{Number(amount).toLocaleString()}</span>
                 </div>
               ))}
               <div className="flex justify-between text-sm font-semibold border-t border-gray-100 pt-2 mt-2">
@@ -192,10 +192,10 @@ export default function PayrollPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{p.total_employees ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-600">
-                        {p.total_gross_salary ? `₹${Number(p.total_gross_salary).toLocaleString()}` : "—"}
+                        {p.total_gross ? `₹${Number(p.total_gross).toLocaleString()}` : "—"}
                       </td>
                       <td className="px-4 py-3 font-semibold text-gray-900">
-                        {p.total_net_salary ? `₹${Number(p.total_net_salary).toLocaleString()}` : "—"}
+                        {p.total_net ? `₹${Number(p.total_net).toLocaleString()}` : "—"}
                       </td>
                       <td className="px-4 py-3">
                         <span className={cfg.class}>{cfg.label}</span>

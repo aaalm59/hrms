@@ -17,6 +17,7 @@ class JobPostSerializer(serializers.ModelSerializer):
 class CandidateSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source="job_post.title", read_only=True)
     full_name = serializers.ReadOnlyField()
+    applied_on = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
         model = Candidate

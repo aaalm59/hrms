@@ -40,7 +40,7 @@ function AddJobModal({ onClose }) {
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   const mutation = useMutation({
-    mutationFn: (d) => api.post("/recruitment/job-posts/", d),
+    mutationFn: (d) => api.post("/recruitment/jobs/", d),
     onSuccess: () => {
       toast.success("Job posted successfully");
       qc.invalidateQueries(["job-posts"]);
@@ -111,7 +111,7 @@ function AddJobModal({ onClose }) {
 }
 
 function CandidateCard({ candidate, onClick }) {
-  const stage = CANDIDATE_STAGES.find((s) => s.key === candidate.current_stage) ?? CANDIDATE_STAGES[0];
+  const stage = CANDIDATE_STAGES.find((s) => s.key === candidate.stage) ?? CANDIDATE_STAGES[0];
   return (
     <div
       onClick={onClick}
@@ -148,13 +148,13 @@ export default function RecruitmentPage() {
 
   const { data: jobs } = useQuery({
     queryKey: ["job-posts", search],
-    queryFn: () => api.get(`/recruitment/job-posts/?search=${search}`).then((r) => r.data),
+    queryFn: () => api.get(`/recruitment/jobs/?search=${search}`).then((r) => r.data),
   });
 
   const { data: candidates } = useQuery({
     queryKey: ["candidates", selectedJob?.id, stageFilter, search],
     queryFn: () =>
-      api.get(`/recruitment/candidates/?${selectedJob ? `job_post=${selectedJob.id}&` : ""}${stageFilter ? `current_stage=${stageFilter}&` : ""}search=${search}`).then((r) => r.data),
+      api.get(`/recruitment/candidates/?${selectedJob ? `job_post=${selectedJob.id}&` : ""}${stageFilter ? `stage=${stageFilter}&` : ""}search=${search}`).then((r) => r.data),
     enabled: tab === "candidates",
   });
 
@@ -165,7 +165,7 @@ export default function RecruitmentPage() {
   });
 
   const updateCandidateStage = useMutation({
-    mutationFn: ({ id, stage }) => api.patch(`/recruitment/candidates/${id}/`, { current_stage: stage }),
+    mutationFn: ({ id, stage }) => api.patch(`/recruitment/candidates/${id}/`, { stage }),
     onSuccess: () => {
       toast.success("Stage updated");
       qc.invalidateQueries(["candidates"]);
