@@ -28,8 +28,12 @@ const notificationSlice = createSlice({
       state.items.forEach((n) => (n.is_read = true));
       state.unreadCount = 0;
     },
+    setUnreadCount(state, { payload }) {
+      state.unreadCount = payload;
+    },
   },
 });
 
-export const { setNotifications, addNotification, markRead, markAllRead } = notificationSlice.actions;
+export const { setNotifications, addNotification, markRead, markAllRead, setUnreadCount } = notificationSlice.actions;
+
 export default notificationSlice.reducer;

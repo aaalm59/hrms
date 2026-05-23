@@ -26,6 +26,7 @@ import CompanySetupPage from "@/company-admin/setup/CompanySetupPage";
 import EmployeeDashboard from "@/dashboards/EmployeeDashboard";
 import HRDashboard from "@/dashboards/HRDashboard";
 import EmployeesPage from "@/employees/EmployeesPage";
+import EmployeeDetailPage from "@/employees/EmployeeDetailPage";
 import AttendancePage from "@/attendance/AttendancePage";
 import PayrollPage from "@/payroll/PayrollPage";
 import LeavesPage from "@/leaves/LeavesPage";
@@ -33,7 +34,7 @@ import RecruitmentPage from "@/recruitment/RecruitmentPage";
 import PerformancePage from "@/performance/PerformancePage";
 import AnalyticsPage from "@/analytics/AnalyticsPage";
 import NotificationsPage from "@/notifications/NotificationsPage";
-
+import SettingsPage from "@/settings/SettingsPage";
 
 function ProtectedRoute({ children, requiredRoles = [] }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -101,6 +102,7 @@ export default function AppRoutes() {
         <Route path="/dashboard" element={<EmployeeDashboard />} />
         <Route path="/hr/dashboard" element={<HRDashboard />} />
         <Route path="/employees" element={<EmployeesPage />} />
+        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/payroll" element={<PayrollPage />} />
         <Route path="/leaves" element={<LeavesPage />} />
@@ -108,6 +110,7 @@ export default function AppRoutes() {
         <Route path="/performance" element={<PerformancePage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
 
       {/* Redirects */}
