@@ -23,16 +23,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     primary_role = serializers.ReadOnlyField()
     company_name = serializers.CharField(source="company.name", read_only=True)
+    roles = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "email", "username", "first_name", "last_name",
             "phone", "avatar", "status", "is_super_admin",
-            "company", "company_name", "primary_role",
-            "is_mfa_enabled", "date_joined",
+            "company", "company_name", "primary_role", "roles",
+            "is_mfa_enabled", "last_login", "date_joined",
         ]
-        read_only_fields = ["id", "is_super_admin", "date_joined"]
+        read_only_fields = ["id", "is_super_admin", "date_joined", "last_login"]
+
+    def get_roles(self, obj):
+        return list(obj.roles.values_list("role__name", flat=True))
 
 
 class CreateCompanyUserSerializer(serializers.ModelSerializer):

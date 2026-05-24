@@ -84,10 +84,12 @@ class UserListView(generics.ListAPIView):
 
     def get_queryset(self):
         from rest_framework import filters
-        qs = User.objects.all()
+        qs = User.objects.select_related("company").prefetch_related("roles__role")
         company_id = self.request.query_params.get("company_id")
         search = self.request.query_params.get("search", "")
         status_filter = self.request.query_params.get("status", "")
+        role_filter = self.request.query_params.get("role", "")
+        super_admin_filter = self.request.query_params.get("is_super_admin", "")
         if company_id:
             qs = qs.filter(company_id=company_id)
         if search:
@@ -98,6 +100,12 @@ class UserListView(generics.ListAPIView):
             )
         if status_filter:
             qs = qs.filter(status=status_filter)
+        if role_filter:
+            qs = qs.filter(roles__role__name=role_filter)
+        if super_admin_filter == "false":
+            qs = qs.filter(is_super_admin=False)
+        elif super_admin_filter == "true":
+            qs = qs.filter(is_super_admin=True)
         return qs.order_by("-date_joined")
 
 

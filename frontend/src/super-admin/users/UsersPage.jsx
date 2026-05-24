@@ -113,10 +113,10 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600 text-xs">{u.email}</td>
                   <td className="px-4 py-3">
-                    {u.company ? (
+                    {u.company_name ? (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Building2 className="w-3 h-3 text-gray-400" />
-                        {u.company.name ?? u.company}
+                        {u.company_name}
                       </div>
                     ) : (
                       <span className="text-xs text-gray-400">Platform</span>

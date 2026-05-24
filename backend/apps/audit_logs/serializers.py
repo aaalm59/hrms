@@ -11,6 +11,8 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 
 
 class LoginLogSerializer(serializers.ModelSerializer):
+    user_agent = serializers.CharField(source="device", read_only=True)
+
     class Meta:
         model = LoginLog
         fields = "__all__"

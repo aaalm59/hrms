@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db.models import Q
 from apps.core.permissions import IsCompanyAdmin, IsSuperAdmin
 from .models import Role, Permission, UserRole, RolePermission
 from .serializers import RoleSerializer, PermissionSerializer, UserRoleSerializer
@@ -53,9 +54,16 @@ class RoleViewSet(viewsets.ModelViewSet):
 
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Permission.objects.all().order_by("module", "action")
     serializer_class = PermissionSerializer
     permission_classes = [IsCompanyAdmin]
+
+    def get_queryset(self):
+        if self.request.user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            if company_id:
+                return Permission.objects.filter(Q(company_id=company_id) | Q(company__isnull=True)).order_by("module", "action")
+            return Permission.objects.all().order_by("module", "action")
+        return Permission.objects.filter(Q(company=self.request.user.company) | Q(company__isnull=True)).order_by("module", "action")
 
 
 class UserRoleViewSet(viewsets.ModelViewSet):

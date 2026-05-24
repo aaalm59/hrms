@@ -39,6 +39,7 @@ class PayslipSerializer(serializers.ModelSerializer):
 
 class PayrollSerializer(serializers.ModelSerializer):
     payslip_count = serializers.SerializerMethodField()
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Payroll

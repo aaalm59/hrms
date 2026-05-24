@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Users, Clock, Calendar, AlertCircle, DollarSign,
   Briefcase, TrendingUp, ArrowUpRight, UserCheck, UserX,
-  CheckCircle, RefreshCw, Building2
+  CheckCircle, RefreshCw, Building2, LogOut
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,10 +11,42 @@ import {
 import StatCard from "@/components/common/StatCard";
 import PageHeader from "@/components/common/PageHeader";
 import api from "@/services/api";
-import { useSelector } from "react-redux";
-import { selectCurrentUser } from "@/redux/slices/authSlice";
+import { useSelector, useDispatch } from "react-redux";
+import { selectCurrentUser, setCredentials } from "@/redux/slices/authSlice";
 import { format } from "date-fns";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+function ImpersonationBanner() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const saAccess = sessionStorage.getItem("sa_access");
+  if (!saAccess) return null;
+
+  const handleExit = () => {
+    const saAccess = sessionStorage.getItem("sa_access");
+    const saRefresh = sessionStorage.getItem("sa_refresh");
+    sessionStorage.removeItem("sa_access");
+    sessionStorage.removeItem("sa_refresh");
+    dispatch(setCredentials({ access: saAccess, refresh: saRefresh }));
+    navigate("/super-admin/dashboard");
+  };
+
+  return (
+    <div className="bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between rounded-xl mb-2">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Building2 className="w-4 h-4" />
+        You are viewing this company as Super Admin
+      </div>
+      <button
+        onClick={handleExit}
+        className="flex items-center gap-1.5 text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg font-semibold transition"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+        Exit &amp; Return to Super Admin
+      </button>
+    </div>
+  );
+}
 
 export default function CompanyAdminDashboard() {
   const user = useSelector(selectCurrentUser);
@@ -32,7 +64,7 @@ export default function CompanyAdminDashboard() {
 
   const { data: pendingLeaves } = useQuery({
     queryKey: ["pending-leaves-admin"],
-    queryFn: () => api.get("/leaves/leave-requests/?status=pending&page_size=5").then((r) => r.data),
+    queryFn: () => api.get("/leaves/?status=pending&page_size=5").then((r) => r.data),
   });
 
   const weeklyAttendance = hrData?.attendance_trend ?? [
@@ -45,6 +77,7 @@ export default function CompanyAdminDashboard() {
 
   return (
     <div className="space-y-6">
+      <ImpersonationBanner />
       <PageHeader
         title={`Welcome, ${user?.full_name?.split(" ")[0] || "Admin"}!`}
         subtitle={`${format(new Date(), "EEEE, MMMM d, yyyy")} · Company Overview`}

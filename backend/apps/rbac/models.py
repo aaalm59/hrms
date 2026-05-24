@@ -47,13 +47,20 @@ class Permission(models.Model):
         APPROVE = "approve", "Approve"
         EXPORT = "export", "Export"
 
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="permissions",
+    )
     module = models.CharField(max_length=50)
     action = models.CharField(max_length=20, choices=Action.choices)
     description = models.CharField(max_length=255, blank=True)
 
     class Meta:
         db_table = "rbac_permissions"
-        unique_together = [["module", "action"]]
+        unique_together = [["company", "module", "action"]]
 
     def __str__(self):
         return f"{self.module}:{self.action}"

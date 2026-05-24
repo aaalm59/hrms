@@ -13,7 +13,8 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Role
-        fields = ["id", "name", "display_name", "is_system_role", "description", "permissions"]
+        fields = ["id", "company", "name", "display_name", "is_system_role", "description", "permissions"]
+        read_only_fields = ["id"]
 
     def get_permissions(self, obj):
         perms = obj.role_permissions.select_related("permission")
@@ -22,9 +23,10 @@ class RoleSerializer(serializers.ModelSerializer):
 
 class UserRoleSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source="role.display_name", read_only=True)
+    role_key = serializers.CharField(source="role.name", read_only=True)
     user_email = serializers.CharField(source="user.email", read_only=True)
 
     class Meta:
         model = UserRole
-        fields = ["id", "user", "user_email", "role", "role_name", "assigned_at"]
+        fields = ["id", "user", "user_email", "role", "role_name", "role_key", "assigned_at"]
         read_only_fields = ["id", "assigned_at"]

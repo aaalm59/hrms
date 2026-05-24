@@ -23,7 +23,7 @@ export default function HRDashboard() {
 
   const { data: pendingLeaves } = useQuery({
     queryKey: ["pending-leaves-hr"],
-    queryFn: () => api.get("/leaves/leave-requests/?status=pending&page_size=5").then((r) => r.data),
+    queryFn: () => api.get("/leaves/?status=pending&page_size=5").then((r) => r.data),
   });
 
   const { data: todayAttendance } = useQuery({

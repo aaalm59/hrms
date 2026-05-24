@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Search, CheckCircle, XCircle, Building2, Users,
-  CreditCard, Calendar, ArrowUpRight, X, Globe, Mail,
-  Phone, MapPin, ChevronDown, Filter
+  ArrowUpRight, X, Edit2, Trash2, AlertTriangle, ChevronLeft, ChevronRight
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "@/services/api";
@@ -21,7 +20,7 @@ const STATUS_BADGE = {
 function CreateOrgModal({ onClose }) {
   const qc = useQueryClient();
   const [step, setStep] = useState(1);
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: { status: "trial", country: "India", timezone: "Asia/Kolkata", currency: "INR" },
   });
 
@@ -87,46 +86,51 @@ function CreateOrgModal({ onClose }) {
               <p className="text-sm font-semibold text-gray-700 mb-3">Organization Details</p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name *</label>
+                  <label className="label">Organization Name *</label>
                   <input {...register("name", { required: true })} className="input" placeholder="Acme Corp" />
+                  {errors.name && <p className="err">Required</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Official Email *</label>
+                  <label className="label">Official Email *</label>
                   <input type="email" {...register("email", { required: true })} className="input" placeholder="hr@acmecorp.com" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className="label">Phone</label>
                   <input {...register("phone")} className="input" placeholder="+91 98765 43210" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <label className="label">Website</label>
                   <input {...register("website")} className="input" placeholder="https://acmecorp.com" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <label className="label">Industry</label>
+                  <input {...register("industry")} className="input" placeholder="Technology" />
+                </div>
+                <div>
+                  <label className="label">Status</label>
                   <select {...register("status")} className="input">
                     <option value="trial">Trial</option>
                     <option value="active">Active</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <label className="label">City</label>
                   <input {...register("city")} className="input" placeholder="Mumbai" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                  <label className="label">State</label>
                   <input {...register("state")} className="input" placeholder="Maharashtra" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                  <label className="label">Country</label>
                   <input {...register("country")} className="input" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Employees</label>
+                  <label className="label">Max Employees</label>
                   <input type="number" {...register("max_employees")} className="input" defaultValue={50} min={1} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
+                  <label className="label">Subscription Plan</label>
                   <select {...register("plan_id")} className="input">
                     <option value="">None (free trial)</option>
                     {plans?.map((p) => (
@@ -149,19 +153,19 @@ function CreateOrgModal({ onClose }) {
               <p className="text-xs text-gray-400 bg-blue-50 px-3 py-2 rounded-lg">This creates the first Company Admin user who can log in and manage the organization.</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                  <label className="label">First Name</label>
                   <input {...register("admin_first_name")} className="input" placeholder="John" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                  <label className="label">Last Name</label>
                   <input {...register("admin_last_name")} className="input" placeholder="Smith" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Admin Email *</label>
+                  <label className="label">Admin Email *</label>
                   <input type="email" {...register("admin_email")} className="input" placeholder="admin@acmecorp.com" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                  <label className="label">Password *</label>
                   <input type="password" {...register("admin_password")} className="input" placeholder="Min 8 characters" />
                 </div>
               </div>
@@ -179,17 +183,201 @@ function CreateOrgModal({ onClose }) {
   );
 }
 
+function EditOrgModal({ company, onClose }) {
+  const qc = useQueryClient();
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: {
+      name: company.name || "",
+      email: company.email || "",
+      phone: company.phone || "",
+      website: company.website || "",
+      industry: company.industry || "",
+      city: company.city || "",
+      state: company.state || "",
+      country: company.country || "",
+      address: company.address || "",
+      pincode: company.pincode || "",
+      gst_number: company.gst_number || "",
+      pan_number: company.pan_number || "",
+      max_employees: company.max_employees || 50,
+      description: company.description || "",
+      status: company.status || "trial",
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: (data) => api.patch(`/companies/${company.id}/`, data).then((r) => r.data),
+    onSuccess: () => {
+      toast.success("Organization updated");
+      qc.invalidateQueries(["companies"]);
+      qc.invalidateQueries(["company-detail", String(company.id)]);
+      onClose();
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || Object.values(err.response?.data || {}).flat().join(", ") || "Update failed"),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Edit Organization</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{company.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+        <form onSubmit={handleSubmit((d) => editMutation.mutate(d))} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="label">Organization Name *</label>
+              <input {...register("name", { required: true })} className="input" />
+              {errors.name && <p className="err">Required</p>}
+            </div>
+            <div>
+              <label className="label">Official Email *</label>
+              <input type="email" {...register("email", { required: true })} className="input" />
+              {errors.email && <p className="err">Required</p>}
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input {...register("phone")} className="input" />
+            </div>
+            <div>
+              <label className="label">Website</label>
+              <input {...register("website")} className="input" />
+            </div>
+            <div>
+              <label className="label">Industry</label>
+              <input {...register("industry")} className="input" placeholder="e.g. Technology" />
+            </div>
+            <div>
+              <label className="label">GST Number</label>
+              <input {...register("gst_number")} className="input" />
+            </div>
+            <div>
+              <label className="label">PAN Number</label>
+              <input {...register("pan_number")} className="input" />
+            </div>
+            <div>
+              <label className="label">City</label>
+              <input {...register("city")} className="input" />
+            </div>
+            <div>
+              <label className="label">State</label>
+              <input {...register("state")} className="input" />
+            </div>
+            <div>
+              <label className="label">Country</label>
+              <input {...register("country")} className="input" />
+            </div>
+            <div>
+              <label className="label">Pincode</label>
+              <input {...register("pincode")} className="input" />
+            </div>
+            <div>
+              <label className="label">Max Employees</label>
+              <input type="number" {...register("max_employees")} className="input" min={1} />
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select {...register("status")} className="input">
+                <option value="trial">Trial</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Address</label>
+              <input {...register("address")} className="input" />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Description</label>
+              <textarea {...register("description")} className="input" rows={3} />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <button type="submit" disabled={editMutation.isPending} className="btn-primary flex-1">
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({ company, onClose }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [confirm, setConfirm] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/companies/${company.id}/`),
+    onSuccess: () => {
+      toast.success(`"${company.name}" deleted`);
+      qc.invalidateQueries(["companies"]);
+      qc.invalidateQueries(["super-admin-dashboard"]);
+      onClose();
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || "Failed to delete"),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-bold text-red-700">Delete Organization</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">This action is permanent and irreversible</p>
+              <p className="text-xs text-red-600 mt-1">All company data including employees, payroll records, and settings will be permanently deleted.</p>
+            </div>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Type <strong className="text-gray-900">{company.name}</strong> to confirm:</p>
+            <input
+              className="input"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder={company.name}
+            />
+          </div>
+        </div>
+        <div className="p-5 border-t border-gray-100 flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+          <button
+            onClick={() => deleteMutation.mutate()}
+            disabled={confirm !== company.name || deleteMutation.isPending}
+            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CompaniesPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
+  const [editCompany, setEditCompany] = useState(null);
+  const [deleteCompany, setDeleteCompany] = useState(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["companies", search, statusFilter],
+    queryKey: ["companies", search, statusFilter, page],
     queryFn: () =>
-      api.get(`/companies/?search=${search}${statusFilter ? `&status=${statusFilter}` : ""}&ordering=-created_at`).then((r) => r.data),
+      api.get(`/companies/?search=${search}${statusFilter ? `&status=${statusFilter}` : ""}&ordering=-created_at&page=${page}`).then((r) => r.data),
   });
 
   const activateMutation = useMutation({
@@ -205,6 +393,7 @@ export default function CompaniesPage() {
   });
 
   const companies = data?.results ?? [];
+  const totalPages = data?.count ? Math.ceil(data.count / 20) : 1;
 
   return (
     <div className="space-y-5">
@@ -245,12 +434,12 @@ export default function CompaniesPage() {
               className="input pl-9 py-2 text-sm"
               placeholder="Search organization, email, slug..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             className="input py-2 text-sm w-36"
           >
             <option value="">All Status</option>
@@ -302,11 +491,13 @@ export default function CompaniesPage() {
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="text-gray-600 text-xs">{c.email}</p>
+                    {c.phone && <p className="text-gray-400 text-xs">{c.phone}</p>}
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1">
                       <Users className="w-3.5 h-3.5 text-gray-400" />
                       <span className="text-gray-700 font-medium">{c.employee_count}</span>
+                      {c.max_employees && <span className="text-gray-400 text-xs">/ {c.max_employees}</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-gray-500 text-xs">{c.subscription_plan ?? "—"}</td>
@@ -319,7 +510,7 @@ export default function CompaniesPage() {
                     {c.created_at ? format(parseISO(c.created_at), "dd MMM yyyy") : "—"}
                   </td>
                   <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {c.status !== "active" && (
                         <button
                           onClick={() => activateMutation.mutate(c.id)}
@@ -339,8 +530,23 @@ export default function CompaniesPage() {
                         </button>
                       )}
                       <button
+                        onClick={() => setEditCompany(c)}
+                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteCompany(c)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => navigate(`/super-admin/companies/${c.id}`)}
                         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                        title="View Details"
                       >
                         <ArrowUpRight className="w-4 h-4" />
                       </button>
@@ -351,9 +557,37 @@ export default function CompaniesPage() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {data && data.count > 20 && (
+          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm">
+            <p className="text-gray-500 text-xs">
+              Page {page} of {totalPages} · {data.count} total organizations
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={!data.previous}
+                onClick={() => setPage((p) => p - 1)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 text-xs hover:bg-gray-50"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> Previous
+              </button>
+              <span className="text-xs text-gray-400 px-2">{page}</span>
+              <button
+                disabled={!data.next}
+                onClick={() => setPage((p) => p + 1)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 text-xs hover:bg-gray-50"
+              >
+                Next <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
+      {editCompany && <EditOrgModal company={editCompany} onClose={() => setEditCompany(null)} />}
+      {deleteCompany && <DeleteConfirmModal company={deleteCompany} onClose={() => setDeleteCompany(null)} />}
     </div>
   );
 }

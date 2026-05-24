@@ -11,6 +11,7 @@ class ShiftSerializer(serializers.ModelSerializer):
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
     shift_name = serializers.CharField(source="shift.name", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Attendance

@@ -20,7 +20,12 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "code"]
 
     def get_queryset(self):
-        return Department.objects.filter(company=self.request.user.company)
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = Department.objects.all()
+            return qs.filter(company_id=company_id) if company_id else qs
+        return Department.objects.filter(company=user.company)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)

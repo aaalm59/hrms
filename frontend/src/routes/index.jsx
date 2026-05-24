@@ -22,6 +22,11 @@ import RBACPage from "@/super-admin/rbac/RBACPage";
 import BillingPage from "@/super-admin/billing/BillingPage";
 import SuperAdminAnalyticsPage from "@/super-admin/analytics/SuperAdminAnalyticsPage";
 import UsersPage from "@/super-admin/users/UsersPage";
+import CompanyAdminsPage from "@/super-admin/company-admins/CompanyAdminsPage";
+import GlobalEmployeesPage from "@/super-admin/global-employees/GlobalEmployeesPage";
+import GlobalAttendancePage from "@/super-admin/global-attendance/GlobalAttendancePage";
+import GlobalLeavesPage from "@/super-admin/global-leaves/GlobalLeavesPage";
+import GlobalPayrollPage from "@/super-admin/global-payroll/GlobalPayrollPage";
 
 // Company Admin pages
 import CompanyAdminDashboard from "@/company-admin/dashboard/CompanyAdminDashboard";
@@ -41,13 +46,18 @@ import AnalyticsPage from "@/analytics/AnalyticsPage";
 import NotificationsPage from "@/notifications/NotificationsPage";
 import SettingsPage from "@/settings/SettingsPage";
 
+// New pages
+import FinancePage from "@/finance/FinancePage";
+import ReportsPage from "@/reports/ReportsPage";
+import AuditLogsPage from "@/audit-logs/AuditLogsPage";
+
 function ProtectedRoute({ children, requiredRoles = [] }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const roles = useSelector(selectUserRoles);
 
   if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
   if (requiredRoles.length > 0 && !requiredRoles.some((r) => roles.includes(r))) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return children;
 }
@@ -87,21 +97,14 @@ export default function AppRoutes() {
         <Route path="/super-admin/billing" element={<BillingPage />} />
         <Route path="/super-admin/analytics" element={<SuperAdminAnalyticsPage />} />
         <Route path="/super-admin/users" element={<UsersPage />} />
+        <Route path="/super-admin/company-admins" element={<CompanyAdminsPage />} />
+        <Route path="/super-admin/employees" element={<GlobalEmployeesPage />} />
+        <Route path="/super-admin/attendance" element={<GlobalAttendancePage />} />
+        <Route path="/super-admin/leaves" element={<GlobalLeavesPage />} />
+        <Route path="/super-admin/payroll-overview" element={<GlobalPayrollPage />} />
       </Route>
 
-      {/* Company Admin routes */}
-      <Route
-        element={
-          <ProtectedRoute requiredRoles={["company_admin"]}>
-            <MainLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/company-admin/dashboard" element={<CompanyAdminDashboard />} />
-        <Route path="/company-admin/setup" element={<CompanySetupPage />} />
-      </Route>
-
-      {/* HR & General routes */}
+      {/* Company Admin + HR routes (all under MainLayout) */}
       <Route
         element={
           <ProtectedRoute>
@@ -109,8 +112,15 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        {/* Company Admin */}
+        <Route path="/company-admin/dashboard" element={<CompanyAdminDashboard />} />
+        <Route path="/company-admin/setup" element={<CompanySetupPage />} />
+
+        {/* Dashboards */}
         <Route path="/dashboard" element={<EmployeeDashboard />} />
         <Route path="/hr/dashboard" element={<HRDashboard />} />
+
+        {/* Core HR */}
         <Route path="/employees" element={<EmployeesPage />} />
         <Route path="/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
@@ -118,7 +128,14 @@ export default function AppRoutes() {
         <Route path="/leaves" element={<LeavesPage />} />
         <Route path="/recruitment" element={<RecruitmentPage />} />
         <Route path="/performance" element={<PerformancePage />} />
+
+        {/* New modules */}
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/finance" element={<FinancePage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
+
+        {/* System */}
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

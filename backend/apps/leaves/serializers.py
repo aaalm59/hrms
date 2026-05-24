@@ -22,6 +22,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     leave_type_name = serializers.CharField(source="leave_type.name", read_only=True)
     reviewed_by_name = serializers.CharField(source="reviewed_by.get_full_name", read_only=True)
     applied_on = serializers.DateTimeField(source="created_at", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = LeaveRequest

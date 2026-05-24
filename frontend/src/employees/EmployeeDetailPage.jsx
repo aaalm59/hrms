@@ -44,7 +44,7 @@ export default function EmployeeDetailPage() {
 
   const { data: leaveBalance } = useQuery({
     queryKey: ["emp-leave-balance", id],
-    queryFn: () => api.get(`/leaves/leave-balances/?employee=${id}`).then((r) => r.data),
+    queryFn: () => api.get(`/leaves/balances/?employee_id=${id}`).then((r) => r.data),
   });
 
   if (isLoading) {

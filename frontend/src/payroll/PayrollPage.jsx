@@ -95,7 +95,7 @@ export default function PayrollPage() {
 
   const { data: payrolls } = useQuery({
     queryKey: ["payrolls"],
-    queryFn: () => api.get("/payroll/payrolls/?ordering=-year,-month").then((r) => r.data),
+    queryFn: () => api.get("/payroll/?ordering=-year,-month").then((r) => r.data),
     enabled: isHR,
   });
 
@@ -111,7 +111,7 @@ export default function PayrollPage() {
   });
 
   const processPayroll = useMutation({
-    mutationFn: (id) => api.post(`/payroll/payrolls/${id}/process/`),
+    mutationFn: (id) => api.post(`/payroll/${id}/process/`),
     onSuccess: () => {
       toast.success("Payroll processing started");
       qc.invalidateQueries(["payrolls"]);

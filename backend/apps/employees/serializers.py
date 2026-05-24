@@ -43,13 +43,14 @@ class EmergencyContactSerializer(serializers.ModelSerializer):
 class EmployeeListSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source="department.name", read_only=True)
     designation_name = serializers.CharField(source="designation.name", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
         model = Employee
         fields = [
             "id", "employee_id", "first_name", "last_name", "email",
             "phone", "photo", "department_name", "designation_name",
-            "status", "date_of_joining", "employment_type",
+            "status", "date_of_joining", "employment_type", "company_name",
         ]
 
 

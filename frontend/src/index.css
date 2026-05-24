@@ -33,4 +33,20 @@
   .badge-pending {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
   }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .err {
+    @apply text-xs text-red-500 mt-1;
+  }
+  /* Dark mode overrides */
+  .dark .card {
+    @apply bg-gray-900 border-gray-800 text-gray-100;
+  }
+  .dark .input {
+    @apply bg-gray-800 border-gray-700 text-gray-100;
+  }
+  .dark .btn-secondary {
+    @apply bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700;
+  }
 }

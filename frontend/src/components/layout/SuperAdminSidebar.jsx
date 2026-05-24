@@ -2,7 +2,8 @@ import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   LayoutDashboard, Building2, CreditCard, Activity, Settings,
-  Users, Shield, BarChart3, DollarSign, Key, Globe
+  Users, Shield, BarChart3, DollarSign, Key, Globe,
+  UserCheck, Clock, Calendar, Briefcase, TrendingUp, FileText,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -17,20 +18,30 @@ const NAV_GROUPS = [
     label: "Organizations",
     items: [
       { to: "/super-admin/companies", icon: Building2, label: "All Organizations" },
+      { to: "/super-admin/company-admins", icon: UserCheck, label: "Company Admins" },
       { to: "/super-admin/subscriptions", icon: CreditCard, label: "Subscriptions" },
     ],
   },
   {
-    label: "People & Access",
+    label: "HRMS Data",
     items: [
-      { to: "/super-admin/users", icon: Users, label: "Platform Users" },
+      { to: "/super-admin/employees", icon: Users, label: "Employees" },
+      { to: "/super-admin/attendance", icon: Clock, label: "Attendance" },
+      { to: "/super-admin/leaves", icon: Calendar, label: "Leaves" },
+      { to: "/super-admin/payroll-overview", icon: DollarSign, label: "Payroll" },
+    ],
+  },
+  {
+    label: "Platform Admin",
+    items: [
+      { to: "/super-admin/users", icon: Shield, label: "Platform Users" },
       { to: "/super-admin/rbac", icon: Key, label: "Roles & RBAC" },
     ],
   },
   {
     label: "Finance",
     items: [
-      { to: "/super-admin/billing", icon: DollarSign, label: "Billing & Revenue" },
+      { to: "/super-admin/billing", icon: TrendingUp, label: "Billing & Revenue" },
     ],
   },
   {
@@ -42,7 +53,7 @@ const NAV_GROUPS = [
   {
     label: "Security",
     items: [
-      { to: "/super-admin/security", icon: Shield, label: "Audit & Security" },
+      { to: "/super-admin/security", icon: FileText, label: "Audit & Logs" },
       { to: "/super-admin/monitoring", icon: Activity, label: "System Monitor" },
     ],
   },
@@ -110,22 +121,20 @@ export default function SuperAdminSidebar() {
       </nav>
 
       {/* Footer */}
-      {sidebarOpen && (
-        <div className="p-3 border-t border-gray-800">
-          <NavLink
-            to="/super-admin/settings"
-            className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                isActive ? "bg-primary-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
-              )
-            }
-          >
-            <Settings className="w-4 h-4" />
-            <span>Platform Settings</span>
-          </NavLink>
-        </div>
-      )}
+      <div className="p-3 border-t border-gray-800">
+        <NavLink
+          to="/super-admin/settings"
+          className={({ isActive }) =>
+            clsx(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              isActive ? "bg-primary-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            )
+          }
+        >
+          <Settings className="w-4 h-4 flex-shrink-0" />
+          {sidebarOpen && <span>Platform Settings</span>}
+        </NavLink>
+      </div>
     </aside>
   );
 }
