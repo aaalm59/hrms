@@ -20,7 +20,10 @@ class TeamSerializer(serializers.ModelSerializer):
         exclude = ["company"]
 
     def get_member_count(self, obj):
-        return obj.members.filter(is_active=True).count()
+        # Use all_objects + explicit company_id — never rely on reverse FK manager
+        return Employee.all_objects.filter(
+            team=obj, company_id=obj.company_id, is_active=True
+        ).count()
 
     def get_today_present(self, obj):
         from django.utils import timezone
@@ -38,7 +41,7 @@ class TeamSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         from apps.attendance.models import Attendance
         today = timezone.now().date()
-        total = obj.members.filter(is_active=True).count()
+        total = Employee.all_objects.filter(team=obj, company_id=obj.company_id, is_active=True).count()
         accounted = Attendance.all_objects.filter(
             company_id=obj.company_id,
             employee__team=obj,

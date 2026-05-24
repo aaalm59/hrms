@@ -73,6 +73,16 @@ function SuperAdminRoute({ children }) {
   return children;
 }
 
+function CompanyAdminRoute({ children }) {
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  const isSuperAdmin = useSelector(selectIsSuperAdmin);
+  const roles = useSelector(selectUserRoles);
+  if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
+  if (isSuperAdmin) return <Navigate to="/super-admin/dashboard" replace />;
+  if (!roles.includes("company_admin")) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -115,9 +125,23 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Company Admin */}
-        <Route path="/company-admin/dashboard" element={<CompanyAdminDashboard />} />
-        <Route path="/company-admin/setup" element={<CompanySetupPage />} />
+        {/* Company Admin — restricted to company_admin role */}
+        <Route
+          path="/company-admin/dashboard"
+          element={
+            <CompanyAdminRoute>
+              <CompanyAdminDashboard />
+            </CompanyAdminRoute>
+          }
+        />
+        <Route
+          path="/company-admin/setup"
+          element={
+            <CompanyAdminRoute>
+              <CompanySetupPage />
+            </CompanyAdminRoute>
+          }
+        />
 
         {/* Dashboards */}
         <Route path="/dashboard" element={<EmployeeDashboard />} />

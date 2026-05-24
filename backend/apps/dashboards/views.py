@@ -1,3 +1,4 @@
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
@@ -138,6 +139,12 @@ class CompanyAdminDashboardView(APIView):
     permission_classes = [IsCompanyAdmin]
 
     def get(self, request):
+        if request.user.is_super_admin:
+            return Response(
+                {"detail": "Super admin must use the super admin dashboard."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from apps.employees.models import Employee
         from apps.attendance.models import Attendance
         from apps.leaves.models import LeaveRequest
@@ -168,6 +175,12 @@ class HRDashboardView(APIView):
     permission_classes = [IsHRAdmin]
 
     def get(self, request):
+        if request.user.is_super_admin:
+            return Response(
+                {"detail": "Super admin must use the super admin dashboard."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from apps.employees.models import Employee, Department
         from apps.recruitment.models import JobPost, Candidate
         from apps.leaves.models import LeaveRequest
@@ -280,12 +293,16 @@ class EmployeeDashboardView(APIView):
         # Team data (employee sees only their own team)
         team_data = None
         if employee.team_id:
-            employee_with_team = employee.__class__.all_objects.select_related(
+            from apps.employees.models import Team, Employee as EmpModel
+            employee_with_team = EmpModel.all_objects.select_related(
                 "team__lead"
             ).get(pk=employee.pk)
             team = employee_with_team.team
+            # Explicit company_id filter — never use reverse FK manager
             team_members = list(
-                team.members.filter(is_active=True).select_related("designation")
+                EmpModel.all_objects.filter(
+                    team=team, company_id=request.user.company_id, is_active=True
+                ).select_related("designation")
             )
             member_ids = [m.id for m in team_members]
 

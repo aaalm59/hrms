@@ -14,7 +14,10 @@ class ShiftViewSet(viewsets.ModelViewSet):
     queryset = Shift.objects.none()
 
     def get_queryset(self):
-        return Shift.objects.filter(company=self.request.user.company)
+        cid = self.request.user.company_id
+        if not cid:
+            return Shift.all_objects.none()
+        return Shift.all_objects.filter(company_id=cid)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
@@ -29,11 +32,15 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_super_admin:
             company_id = self.request.query_params.get("company_id")
-            qs = Attendance.objects.all().select_related("employee", "shift")
+            qs = Attendance.all_objects.all().select_related("employee", "shift")
             if company_id:
                 qs = qs.filter(company_id=company_id)
+            else:
+                qs = qs.none()
         else:
-            qs = Attendance.objects.filter(company=user.company).select_related("employee", "shift")
+            if not user.company_id:
+                return Attendance.all_objects.none()
+            qs = Attendance.all_objects.filter(company_id=user.company_id).select_related("employee", "shift")
         date = self.request.query_params.get("date")
         employee_id = self.request.query_params.get("employee_id") or self.request.query_params.get("employee")
         month = self.request.query_params.get("month")  # format: YYYY-MM
@@ -157,7 +164,11 @@ class AttendanceRegularizationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = AttendanceRegularization.objects.filter(company=user.company).select_related("employee", "attendance")
+        if not user.company_id:
+            return AttendanceRegularization.all_objects.none()
+        qs = AttendanceRegularization.all_objects.filter(
+            company_id=user.company_id
+        ).select_related("employee", "attendance")
         if not (user.is_super_admin or user.has_role("hr_admin") or user.has_role("manager")):
             qs = qs.filter(employee__user=user)
         return qs
