@@ -1,4 +1,6 @@
 from rest_framework import generics, status, permissions
+from django.db import models as django_models
+models = django_models
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -81,8 +83,73 @@ class UserListView(generics.ListAPIView):
     permission_classes = [IsSuperAdmin]
 
     def get_queryset(self):
+        from rest_framework import filters
         qs = User.objects.all()
         company_id = self.request.query_params.get("company_id")
+        search = self.request.query_params.get("search", "")
+        status_filter = self.request.query_params.get("status", "")
         if company_id:
             qs = qs.filter(company_id=company_id)
-        return qs
+        if search:
+            qs = qs.filter(
+                models.Q(email__icontains=search) |
+                models.Q(first_name__icontains=search) |
+                models.Q(last_name__icontains=search)
+            )
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs.order_by("-date_joined")
+
+
+class ImpersonateView(APIView):
+    """Super Admin: generate JWT tokens for a company's admin user (Login As)."""
+    permission_classes = [IsSuperAdmin]
+
+    def post(self, request, company_id):
+        from apps.companies.models import Company
+        try:
+            company = Company.objects.get(id=company_id)
+        except Company.DoesNotExist:
+            return Response({"detail": "Company not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Find the company admin user (most recently joined)
+        admin_user = User.objects.filter(
+            company=company, is_super_admin=False
+        ).order_by("-date_joined").first()
+
+        if not admin_user:
+            return Response({"detail": "No users found in this company."}, status=status.HTTP_400_BAD_REQUEST)
+
+        refresh = RefreshToken.for_user(admin_user)
+        refresh["email"] = admin_user.email
+        refresh["full_name"] = admin_user.get_full_name()
+        refresh["is_super_admin"] = False
+        refresh["company_id"] = admin_user.company_id
+        refresh["company_name"] = admin_user.company.name if admin_user.company else None
+        refresh["roles"] = list(admin_user.roles.values_list("role__name", flat=True))
+        refresh["impersonated_by"] = request.user.email
+
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user_email": admin_user.email,
+            "user_name": admin_user.get_full_name(),
+            "company": company.name,
+        })
+
+
+class ResetUserPasswordView(APIView):
+    """Super Admin: reset any user's password."""
+    permission_classes = [IsSuperAdmin]
+
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        new_password = request.data.get("new_password")
+        if not new_password or len(new_password) < 6:
+            return Response({"detail": "Password must be at least 6 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({"detail": f"Password reset for {user.email}."})

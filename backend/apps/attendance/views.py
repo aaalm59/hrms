@@ -26,7 +26,14 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.none()
 
     def get_queryset(self):
-        qs = Attendance.objects.filter(company=self.request.user.company).select_related("employee", "shift")
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = Attendance.objects.all().select_related("employee", "shift")
+            if company_id:
+                qs = qs.filter(company_id=company_id)
+        else:
+            qs = Attendance.objects.filter(company=user.company).select_related("employee", "shift")
         date = self.request.query_params.get("date")
         employee_id = self.request.query_params.get("employee_id") or self.request.query_params.get("employee")
         month = self.request.query_params.get("month")  # format: YYYY-MM

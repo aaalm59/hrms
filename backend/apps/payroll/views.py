@@ -35,7 +35,12 @@ class PayrollViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPayrollManager]
 
     def get_queryset(self):
-        return Payroll.objects.filter(company=self.request.user.company)
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = Payroll.objects.all()
+            return qs.filter(company_id=company_id) if company_id else qs
+        return Payroll.objects.filter(company=user.company)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
@@ -62,7 +67,13 @@ class PayslipViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = Payslip.objects.all()
+            if company_id:
+                qs = qs.filter(company_id=company_id)
+            return qs
         qs = Payslip.objects.filter(company=user.company)
-        if not (user.is_super_admin or user.has_role("payroll_manager") or user.has_role("hr_admin")):
+        if not (user.has_role("payroll_manager") or user.has_role("hr_admin")):
             qs = qs.filter(employee__user=user)
         return qs

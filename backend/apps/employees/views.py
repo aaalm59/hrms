@@ -45,8 +45,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     ordering_fields = ["first_name", "date_of_joining", "created_at"]
 
     def get_queryset(self):
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = Employee.objects.all()
+            if company_id:
+                qs = qs.filter(company_id=company_id)
+            return qs.select_related("department", "designation", "reporting_manager")
         return Employee.objects.filter(
-            company=self.request.user.company
+            company=user.company
         ).select_related("department", "designation", "reporting_manager")
 
     def get_serializer_class(self):
