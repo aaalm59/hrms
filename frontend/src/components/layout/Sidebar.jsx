@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Clock, DollarSign, Calendar,
   Briefcase, TrendingUp, BarChart2, Bell, Settings,
   Building2, Shield, FileText, Activity, Wallet,
-  Target, UsersRound, UserCog, Search,
+  Target, UsersRound, UserCog, Search, KeyRound,
 } from "lucide-react";
 import { selectUserRoles, selectCurrentUser } from "@/redux/slices/authSlice";
 import { clsx } from "clsx";
@@ -55,6 +55,7 @@ const ROLE_NAV = {
     {
       label: "System",
       items: [
+        { to: "/rbac", icon: KeyRound, label: "Roles & Access" },
         { to: "/audit-logs", icon: Activity, label: "Audit Logs" },
         { to: "/company-admin/setup", icon: UserCog, label: "Company Setup" },
       ],
@@ -94,6 +95,7 @@ const ROLE_NAV = {
     {
       label: "System",
       items: [
+        { to: "/rbac", icon: KeyRound, label: "Roles & Access" },
         { to: "/audit-logs", icon: Activity, label: "Audit Logs" },
       ],
     },

@@ -60,6 +60,7 @@ import FinancePage from "@/finance/FinancePage";
 import ReportsPage from "@/reports/ReportsPage";
 import AuditLogsPage from "@/audit-logs/AuditLogsPage";
 import TeamsPage from "@/teams/TeamsPage";
+import RBACManagePage from "@/rbac/RBACManagePage";
 
 // ─── Route Guards ─────────────────────────────────────────────────────────────
 
@@ -294,6 +295,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute requiredRoles={["company_admin", "hr_admin"]}>
               <AuditLogsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rbac"
+          element={
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin"]}>
+              <RBACManagePage />
             </ProtectedRoute>
           }
         />

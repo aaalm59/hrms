@@ -1,6 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.db.models import Q
 from apps.core.permissions import IsCompanyAdmin, IsSuperAdmin
 from .models import Role, Permission, UserRole, RolePermission
@@ -77,3 +79,20 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(assigned_by=self.request.user)
+
+
+class MyPermissionsView(APIView):
+    """Return the current user's effective permissions (flattened across all roles)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.is_super_admin:
+            return Response({"permissions": ["*"], "roles": ["super_admin"], "is_super_admin": True})
+
+        roles = list(request.user.roles.values_list("role__name", flat=True))
+        perms = set()
+        for user_role in request.user.roles.select_related("role").all():
+            for rp in user_role.role.role_permissions.select_related("permission").all():
+                perms.add(f"{rp.permission.module}:{rp.permission.action}")
+
+        return Response({"permissions": sorted(perms), "roles": roles, "is_super_admin": False})

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Filter, X, User } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
+import PermissionGate from "@/components/common/PermissionGate";
 import api from "@/services/api";
 import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -196,9 +197,11 @@ export default function EmployeesPage() {
         title="Employees"
         subtitle={`${data?.count ?? 0} employees`}
         actions={
-          <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add Employee
-          </button>
+          <PermissionGate module="employees" action="create">
+            <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Add Employee
+            </button>
+          </PermissionGate>
         }
       />
 

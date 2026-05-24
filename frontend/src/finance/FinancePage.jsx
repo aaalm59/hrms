@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import PermissionGate from "@/components/common/PermissionGate";
 import {
   DollarSign, Plus, TrendingUp, TrendingDown, Wallet,
   Search, Filter, CheckCircle, XCircle, Clock, X, Edit, PieChart
@@ -229,13 +230,17 @@ export default function FinancePage() {
         actions={
           <div className="flex gap-2">
             {tab === "budgets" && (
-              <button onClick={() => setShowBudgetModal(true)} className="btn-secondary flex items-center gap-2 text-sm">
-                <Plus className="w-4 h-4" /> Budget
-              </button>
+              <PermissionGate module="finance" action="create">
+                <button onClick={() => setShowBudgetModal(true)} className="btn-secondary flex items-center gap-2 text-sm">
+                  <Plus className="w-4 h-4" /> Budget
+                </button>
+              </PermissionGate>
             )}
-            <button onClick={() => { setEditExpense(null); setShowExpenseModal(true); }} className="btn-primary flex items-center gap-2 text-sm">
-              <Plus className="w-4 h-4" /> Expense
-            </button>
+            <PermissionGate module="finance" action="create">
+              <button onClick={() => { setEditExpense(null); setShowExpenseModal(true); }} className="btn-primary flex items-center gap-2 text-sm">
+                <Plus className="w-4 h-4" /> Expense
+              </button>
+            </PermissionGate>
           </div>
         }
       />

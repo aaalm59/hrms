@@ -4,6 +4,7 @@ import {
   Calendar, Plus, Search, Check, X, Clock
 } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
+import PermissionGate from "@/components/common/PermissionGate";
 import api from "@/services/api";
 import { useSelector } from "react-redux";
 import { selectCurrentUser } from "@/redux/slices/authSlice";
@@ -148,6 +149,7 @@ function LeaveReviewModal({ request, onClose }) {
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <PermissionGate module="leaves" action="approve">
             <button
               onClick={() => review.mutate({ action: "reject" })}
               disabled={review.isPending}
@@ -162,6 +164,7 @@ function LeaveReviewModal({ request, onClose }) {
             >
               <Check className="w-4 h-4" /> Approve
             </button>
+            </PermissionGate>
           </div>
         </div>
       </div>

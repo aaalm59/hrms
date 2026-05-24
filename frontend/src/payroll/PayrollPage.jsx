@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import StatCard from "@/components/common/StatCard";
+import PermissionGate from "@/components/common/PermissionGate";
 import api from "@/services/api";
 import { useSelector } from "react-redux";
 import { selectCurrentUser } from "@/redux/slices/authSlice";
@@ -202,13 +203,15 @@ export default function PayrollPage() {
                       </td>
                       <td className="px-4 py-3">
                         {p.status === "draft" && (
-                          <button
-                            onClick={() => processPayroll.mutate(p.id)}
-                            disabled={processPayroll.isPending}
-                            className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 font-medium"
-                          >
-                            <Play className="w-3 h-3" /> Process
-                          </button>
+                          <PermissionGate module="payroll" action="approve">
+                            <button
+                              onClick={() => processPayroll.mutate(p.id)}
+                              disabled={processPayroll.isPending}
+                              className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 font-medium"
+                            >
+                              <Play className="w-3 h-3" /> Process
+                            </button>
+                          </PermissionGate>
                         )}
                       </td>
                     </tr>

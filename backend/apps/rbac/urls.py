@@ -7,4 +7,7 @@ router.register("roles", views.RoleViewSet, basename="role")
 router.register("permissions", views.PermissionViewSet, basename="permission")
 router.register("user-roles", views.UserRoleViewSet, basename="user-role")
 
-urlpatterns = [path("", include(router.urls))]
+urlpatterns = [
+    path("my-permissions/", views.MyPermissionsView.as_view(), name="my-permissions"),
+    path("", include(router.urls)),
+]
