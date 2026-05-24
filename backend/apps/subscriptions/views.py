@@ -7,7 +7,7 @@ from .serializers import PlanSerializer, SubscriptionSerializer, InvoiceSerializ
 
 
 class PlanViewSet(viewsets.ModelViewSet):
-    queryset = Plan.objects.filter(is_active=True)
+    queryset = Plan.objects.filter(is_active=True).order_by("price_monthly", "id")
     serializer_class = PlanSerializer
 
     def get_permissions(self):
@@ -17,7 +17,7 @@ class PlanViewSet(viewsets.ModelViewSet):
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
-    queryset = Subscription.objects.select_related("company", "plan")
+    queryset = Subscription.objects.select_related("company", "plan").order_by("-created_at", "id")
     serializer_class = SubscriptionSerializer
     permission_classes = [IsSuperAdmin]
 
@@ -30,6 +30,6 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Invoice.objects.select_related("subscription__company")
+    queryset = Invoice.objects.select_related("subscription__company").order_by("-created_at", "id")
     serializer_class = InvoiceSerializer
     permission_classes = [IsSuperAdmin]

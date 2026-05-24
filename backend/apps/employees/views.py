@@ -4,13 +4,27 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.core.permissions import IsHRAdmin, IsManager
-from .models import Employee, Department, Designation, EmployeeBankDetail, EmployeeDocument, EmergencyContact
+from .models import Employee, Department, Designation, EmployeeBankDetail, EmployeeDocument, EmergencyContact, Team
 from .serializers import (
     EmployeeListSerializer, EmployeeDetailSerializer,
     DepartmentSerializer, DesignationSerializer,
     EmployeeBankDetailSerializer, EmployeeDocumentSerializer, EmergencyContactSerializer,
+    TeamSerializer,
 )
 from .filters import EmployeeFilter
+
+
+class TeamViewSet(viewsets.ModelViewSet):
+    serializer_class = TeamSerializer
+    permission_classes = [IsHRAdmin]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["name"]
+
+    def get_queryset(self):
+        return Team.objects.filter(company=self.request.user.company)
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

@@ -14,21 +14,38 @@ const STATUS_COLORS = {
   terminated: "bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-medium",
 };
 
-function AddEmployeeModal({ departments, designations, onClose }) {
+function AddEmployeeModal({ departments, designations, teams, onClose }) {
   const qc = useQueryClient();
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: { password: "Welcome@123", role_name: "employee" },
+  });
+
+  const cleanEmployeePayload = (data) =>
+    Object.fromEntries(
+      Object.entries(data).filter(([, value]) => value !== "")
+    );
+
+  const formatApiError = (data) => {
+    if (!data) return "Failed to add employee";
+    if (typeof data === "string") return data;
+    if (Array.isArray(data)) return data.map(formatApiError).join(", ");
+    if (typeof data === "object") {
+      return Object.entries(data)
+        .map(([field, value]) => `${field}: ${formatApiError(value)}`)
+        .join(", ");
+    }
+    return String(data);
+  };
 
   const mutation = useMutation({
-    mutationFn: (d) => api.post("/employees/", d),
+    mutationFn: (d) => api.post("/employees/", cleanEmployeePayload(d)),
     onSuccess: () => {
       toast.success("Employee added successfully");
       qc.invalidateQueries(["employees"]);
       onClose();
     },
     onError: (err) => {
-      const data = err.response?.data;
-      const msg = typeof data === "object" ? Object.values(data).flat().join(", ") : "Failed to add employee";
-      toast.error(msg);
+      toast.error(formatApiError(err.response?.data));
     },
   });
 
@@ -103,6 +120,34 @@ function AddEmployeeModal({ departments, designations, onClose }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
               <input type="date" {...register("date_of_birth")} className="input" />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Team</label>
+              <select {...register("team")} className="input">
+                <option value="">No Team</option>
+                {teams?.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+              <select {...register("role_name", { required: true })} className="input">
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="team_lead">Team Lead</option>
+                <option value="hr_admin">HR Admin</option>
+                <option value="payroll_manager">Payroll Manager</option>
+                <option value="finance_manager">Finance Manager</option>
+                <option value="recruiter">Recruiter</option>
+                <option value="auditor">Auditor</option>
+                <option value="company_admin">Company Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Login Password *</label>
+              <input type="text" {...register("password", { required: true, minLength: 6 })} className="input" placeholder="Welcome@123" />
+              {errors.password && <p className="text-red-500 text-xs mt-1">Min 6 characters</p>}
+            </div>
           </div>
           <div className="flex gap-3 pt-6 mt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
@@ -138,6 +183,11 @@ export default function EmployeesPage() {
   const { data: designations } = useQuery({
     queryKey: ["designations"],
     queryFn: () => api.get("/employees/designations/?page_size=100").then((r) => r.data?.results ?? r.data),
+  });
+
+  const { data: teams } = useQuery({
+    queryKey: ["teams"],
+    queryFn: () => api.get("/employees/teams/?page_size=100").then((r) => r.data?.results ?? r.data),
   });
 
   return (
@@ -245,6 +295,7 @@ export default function EmployeesPage() {
         <AddEmployeeModal
           departments={departments}
           designations={designations}
+          teams={teams}
           onClose={() => setShowAdd(false)}
         />
       )}

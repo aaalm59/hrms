@@ -2,6 +2,21 @@ from django.db import models
 from apps.core.models import TenantModel
 
 
+class Team(TenantModel):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    lead = models.ForeignKey(
+        "Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="led_teams"
+    )
+
+    class Meta:
+        db_table = "teams"
+        unique_together = [["company", "name"]]
+
+    def __str__(self):
+        return self.name
+
+
 class Department(TenantModel):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, blank=True)
@@ -70,6 +85,9 @@ class Employee(TenantModel):
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, related_name="employees")
     reporting_manager = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="reportees"
+    )
+    team = models.ForeignKey(
+        "Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="members"
     )
     employment_type = models.CharField(max_length=20, choices=EmploymentType.choices, default=EmploymentType.FULL_TIME)
     date_of_joining = models.DateField()

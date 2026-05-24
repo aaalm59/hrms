@@ -1,5 +1,24 @@
+import re
+
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import Employee, Department, Designation, EmployeeBankDetail, EmployeeDocument, EmergencyContact
+
+from apps.rbac.models import Role, UserRole
+from .models import Employee, Department, Designation, EmployeeBankDetail, EmployeeDocument, EmergencyContact, Team
+
+User = get_user_model()
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    member_count = serializers.SerializerMethodField()
+    lead_name = serializers.CharField(source="lead.full_name", read_only=True)
+
+    class Meta:
+        model = Team
+        exclude = ["company"]
+
+    def get_member_count(self, obj):
+        return obj.members.filter(is_active=True).count()
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -55,14 +74,61 @@ class EmployeeListSerializer(serializers.ModelSerializer):
 
 
 class EmployeeDetailSerializer(serializers.ModelSerializer):
+    employee_id = serializers.CharField(required=False, allow_blank=True)
+    role_name = serializers.CharField(write_only=True, required=False, default="employee")
+    password = serializers.CharField(write_only=True, required=False, default="Welcome@123")
     bank_detail = EmployeeBankDetailSerializer(read_only=True)
     documents = EmployeeDocumentSerializer(many=True, read_only=True)
     emergency_contacts = EmergencyContactSerializer(many=True, read_only=True)
     department_name = serializers.CharField(source="department.name", read_only=True)
     designation_name = serializers.CharField(source="designation.name", read_only=True)
     manager_name = serializers.CharField(source="reporting_manager.full_name", read_only=True)
+    team_name = serializers.CharField(source="team.name", read_only=True)
 
     class Meta:
         model = Employee
         exclude = ["company"]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        role_name = validated_data.pop("role_name", "employee")
+        password = validated_data.pop("password", "Welcome@123")
+
+        if not validated_data.get("employee_id"):
+            company = validated_data.get("company")
+            validated_data["employee_id"] = self._next_employee_id(company)
+
+        company = validated_data.get("company")
+        email = validated_data.get("email")
+
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "username": email,
+                "first_name": validated_data.get("first_name", ""),
+                "last_name": validated_data.get("last_name", ""),
+                "company": company,
+            },
+        )
+        if created:
+            user.set_password(password)
+            user.save()
+
+        role = (
+            Role.objects.filter(name=role_name, company=company).first()
+            or Role.objects.filter(name=role_name, company=None).first()
+        )
+        if role:
+            UserRole.objects.get_or_create(user=user, role=role)
+
+        validated_data["user"] = user
+        return super().create(validated_data)
+
+    def _next_employee_id(self, company):
+        employee_ids = Employee.all_objects.filter(company=company).values_list("employee_id", flat=True)
+        max_number = 0
+        for employee_id in employee_ids:
+            match = re.fullmatch(r"EMP(\d+)", employee_id or "")
+            if match:
+                max_number = max(max_number, int(match.group(1)))
+        return f"EMP{max_number + 1:03d}"

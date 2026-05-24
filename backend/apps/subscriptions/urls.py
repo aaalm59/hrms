@@ -4,7 +4,7 @@ from . import views
 
 router = DefaultRouter()
 router.register("plans", views.PlanViewSet, basename="plan")
-router.register("", views.SubscriptionViewSet, basename="subscription")
 router.register("invoices", views.InvoiceViewSet, basename="invoice")
+router.register("", views.SubscriptionViewSet, basename="subscription")
 
 urlpatterns = [path("", include(router.urls))]
