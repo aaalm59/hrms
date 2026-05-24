@@ -7,11 +7,11 @@ export default function SuperAdminLayout() {
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <SuperAdminSidebar />
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${sidebarOpen ? "ml-64" : "ml-16"}`}>
         <Navbar variant="super-admin" />
-        <main className="flex-1 overflow-y-auto bg-gray-900 p-6">
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <Outlet />
         </main>
       </div>

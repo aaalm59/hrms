@@ -59,13 +59,53 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company = self.get_object()
         from apps.employees.models import Employee
         from apps.attendance.models import Attendance
+        from apps.leaves.models import LeaveRequest
+        from apps.payroll.models import Payroll
         from django.utils import timezone
         today = timezone.now().date()
+        last_payroll = Payroll.all_objects.filter(company=company).order_by("-year", "-month").first()
         return Response({
             "total_employees": company.employees_employee_set.filter(is_active=True).count(),
             "present_today": Attendance.all_objects.filter(company=company, date=today, status="present").count(),
             "on_leave_today": Attendance.all_objects.filter(company=company, date=today, status="leave").count(),
+            "pending_leaves": LeaveRequest.all_objects.filter(company=company, status="pending").count(),
+            "last_payroll": {
+                "month": last_payroll.month if last_payroll else None,
+                "year": last_payroll.year if last_payroll else None,
+                "total_net": float(last_payroll.total_net) if last_payroll else 0,
+                "status": last_payroll.status if last_payroll else None,
+            } if last_payroll else None,
         })
+
+    @action(detail=True, methods=["post"])
+    def create_admin(self, request, pk=None):
+        """Create a Company Admin user for this company."""
+        company = self.get_object()
+        email = request.data.get("email")
+        password = request.data.get("password")
+        first_name = request.data.get("first_name", "")
+        last_name = request.data.get("last_name", "")
+        if not email or not password:
+            return Response({"detail": "email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email=email).exists():
+            return Response({"detail": "User with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            company=company,
+            status="active",
+        )
+        # Assign company_admin role
+        try:
+            from apps.rbac.models import Role, UserRole
+            role, _ = Role.objects.get_or_create(name="company_admin", company=company)
+            UserRole.objects.get_or_create(user=user, role=role)
+        except Exception:
+            pass
+        return Response({"detail": f"Company Admin '{email}' created successfully.", "user_id": user.id}, status=status.HTTP_201_CREATED)
 
 
 class CompanySettingsViewSet(viewsets.ModelViewSet):

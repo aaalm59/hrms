@@ -1,109 +1,359 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, MoreVertical, CheckCircle, XCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Plus, Search, CheckCircle, XCircle, Building2, Users,
+  CreditCard, Calendar, ArrowUpRight, X, Globe, Mail,
+  Phone, MapPin, ChevronDown, Filter
+} from "lucide-react";
 import toast from "react-hot-toast";
-import PageHeader from "@/components/common/PageHeader";
 import api from "@/services/api";
+import { useForm } from "react-hook-form";
+import { format, parseISO } from "date-fns";
+
+const STATUS_BADGE = {
+  active: "bg-emerald-100 text-emerald-700",
+  suspended: "bg-red-100 text-red-700",
+  trial: "bg-yellow-100 text-yellow-700",
+  inactive: "bg-gray-100 text-gray-500",
+};
+
+function CreateOrgModal({ onClose }) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState(1);
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+    defaultValues: { status: "trial", country: "India", timezone: "Asia/Kolkata", currency: "INR" },
+  });
+
+  const { data: plans } = useQuery({
+    queryKey: ["plans"],
+    queryFn: () => api.get("/subscriptions/plans/").then((r) => r.data?.results ?? r.data),
+  });
+
+  const createOrg = useMutation({
+    mutationFn: async (d) => {
+      const { admin_email, admin_password, admin_first_name, admin_last_name, plan_id, ...orgData } = d;
+      const company = await api.post("/companies/", orgData).then((r) => r.data);
+      if (admin_email && admin_password) {
+        await api.post(`/companies/${company.id}/create_admin/`, {
+          email: admin_email,
+          password: admin_password,
+          first_name: admin_first_name || "",
+          last_name: admin_last_name || "",
+        });
+      }
+      if (plan_id) {
+        const today = new Date();
+        const end = new Date(today); end.setFullYear(end.getFullYear() + 1);
+        await api.post("/subscriptions/", {
+          company: company.id,
+          plan_id,
+          status: "trial",
+          billing_cycle: "monthly",
+          start_date: today.toISOString().split("T")[0],
+          end_date: end.toISOString().split("T")[0],
+          amount_paid: 0,
+        }).catch(() => {});
+      }
+      return company;
+    },
+    onSuccess: () => {
+      toast.success("Organization created successfully");
+      qc.invalidateQueries(["companies"]);
+      qc.invalidateQueries(["super-admin-dashboard"]);
+      onClose();
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || Object.values(err.response?.data || {}).flat().join(", ") || "Failed"),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Create Organization</h2>
+            <div className="flex gap-1 mt-2">
+              {[1, 2].map((s) => (
+                <div key={s} className={`h-1 w-12 rounded-full transition-colors ${step >= s ? "bg-primary-600" : "bg-gray-200"}`} />
+              ))}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit((d) => createOrg.mutate(d))} className="p-6">
+          {step === 1 && (
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Organization Details</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name *</label>
+                  <input {...register("name", { required: true })} className="input" placeholder="Acme Corp" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Official Email *</label>
+                  <input type="email" {...register("email", { required: true })} className="input" placeholder="hr@acmecorp.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input {...register("phone")} className="input" placeholder="+91 98765 43210" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input {...register("website")} className="input" placeholder="https://acmecorp.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select {...register("status")} className="input">
+                    <option value="trial">Trial</option>
+                    <option value="active">Active</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <input {...register("city")} className="input" placeholder="Mumbai" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                  <input {...register("state")} className="input" placeholder="Maharashtra" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                  <input {...register("country")} className="input" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Employees</label>
+                  <input type="number" {...register("max_employees")} className="input" defaultValue={50} min={1} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Plan</label>
+                  <select {...register("plan_id")} className="input">
+                    <option value="">None (free trial)</option>
+                    {plans?.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} — ₹{p.price_monthly}/mo</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <button type="button" onClick={() => setStep(2)} className="btn-primary">
+                  Next: Admin Account →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Company Admin Credentials</p>
+              <p className="text-xs text-gray-400 bg-blue-50 px-3 py-2 rounded-lg">This creates the first Company Admin user who can log in and manage the organization.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                  <input {...register("admin_first_name")} className="input" placeholder="John" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                  <input {...register("admin_last_name")} className="input" placeholder="Smith" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Admin Email *</label>
+                  <input type="email" {...register("admin_email")} className="input" placeholder="admin@acmecorp.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                  <input type="password" {...register("admin_password")} className="input" placeholder="Min 8 characters" />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setStep(1)} className="btn-secondary flex-1">← Back</button>
+                <button type="submit" disabled={createOrg.isPending} className="btn-primary flex-1">
+                  {createOrg.isPending ? "Creating..." : "Create Organization"}
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function CompaniesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["companies", search],
-    queryFn: () => api.get(`/companies/?search=${search}`).then((r) => r.data),
+    queryKey: ["companies", search, statusFilter],
+    queryFn: () =>
+      api.get(`/companies/?search=${search}${statusFilter ? `&status=${statusFilter}` : ""}&ordering=-created_at`).then((r) => r.data),
   });
 
   const activateMutation = useMutation({
     mutationFn: (id) => api.post(`/companies/${id}/activate/`),
-    onSuccess: () => { qc.invalidateQueries(["companies"]); toast.success("Company activated."); },
+    onSuccess: () => { qc.invalidateQueries(["companies"]); toast.success("Organization activated"); },
+    onError: () => toast.error("Failed"),
   });
 
   const suspendMutation = useMutation({
     mutationFn: (id) => api.post(`/companies/${id}/suspend/`),
-    onSuccess: () => { qc.invalidateQueries(["companies"]); toast.success("Company suspended."); },
+    onSuccess: () => { qc.invalidateQueries(["companies"]); toast.success("Organization suspended"); },
+    onError: () => toast.error("Failed"),
   });
 
-  const STATUS_BADGE = {
-    active: "badge-active",
-    suspended: "bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full text-xs font-medium",
-    trial: "badge-pending",
-    inactive: "badge-inactive",
-  };
+  const companies = data?.results ?? [];
 
   return (
-    <div>
-      <PageHeader
-        title="Companies"
-        subtitle="Manage all tenant companies on the platform"
-        actions={
-          <button className="btn-primary flex items-center gap-2">
-            <Plus className="w-4 h-4" /> Add Company
-          </button>
-        }
-      />
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          className="input pl-9"
-          placeholder="Search companies..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {data?.count ?? "—"} total organizations on the platform
+          </p>
+        </div>
+        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Create Organization
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total", value: data?.count ?? 0, color: "text-gray-900", bg: "bg-gray-50" },
+          { label: "Active", value: companies.filter((c) => c.status === "active").length, color: "text-emerald-700", bg: "bg-emerald-50" },
+          { label: "Trial", value: companies.filter((c) => c.status === "trial").length, color: "text-yellow-700", bg: "bg-yellow-50" },
+          { label: "Suspended", value: companies.filter((c) => c.status === "suspended").length, color: "text-red-700", bg: "bg-red-50" },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} className={`${bg} rounded-xl px-4 py-3 flex items-center justify-between`}>
+            <span className="text-sm text-gray-500">{label}</span>
+            <span className={`text-xl font-bold ${color}`}>{value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              className="input pl-9 py-2 text-sm"
+              placeholder="Search organization, email, slug..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input py-2 text-sm w-36"
+          >
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="trial">Trial</option>
+            <option value="suspended">Suspended</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Company", "Email", "Employees", "Plan", "Status", "Joined", "Actions"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium text-gray-600">{h}</th>
+              {["Organization", "Contact", "Employees", "Plan", "Status", "Created", "Actions"].map((h) => (
+                <th key={h} className="text-left px-4 py-3 font-medium text-gray-500 text-xs">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading...</td></tr>
-            ) : data?.results?.map((company) => (
-              <tr key={company.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{company.name}</td>
-                <td className="px-4 py-3 text-gray-500">{company.email}</td>
-                <td className="px-4 py-3">{company.employee_count}</td>
-                <td className="px-4 py-3">{company.subscription_plan ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span className={STATUS_BADGE[company.status] ?? "badge-inactive"}>
-                    {company.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-500">
-                  {new Date(company.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => activateMutation.mutate(company.id)}
-                      className="text-green-600 hover:text-green-800"
-                      title="Activate"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => suspendMutation.mutate(company.id)}
-                      className="text-red-500 hover:text-red-700"
-                      title="Suspend"
-                    >
-                      <XCircle className="w-4 h-4" />
-                    </button>
-                  </div>
+              <tr><td colSpan={7} className="text-center py-10 text-gray-400">Loading...</td></tr>
+            ) : companies.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-14 text-gray-400">
+                  <Building2 className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                  <p>No organizations found</p>
+                  <button onClick={() => setShowCreate(true)} className="mt-3 btn-primary text-xs">
+                    Create First Organization
+                  </button>
                 </td>
               </tr>
-            ))}
+            ) : (
+              companies.map((c) => (
+                <tr
+                  key={c.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/super-admin/companies/${c.id}`)}
+                >
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-primary-700 font-bold text-sm">{c.name?.[0]?.toUpperCase()}</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{c.name}</p>
+                        <p className="text-xs text-gray-400">{c.slug}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-gray-600 text-xs">{c.email}</p>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-gray-700 font-medium">{c.employee_count}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-gray-500 text-xs">{c.subscription_plan ?? "—"}</td>
+                  <td className="px-4 py-3.5">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[c.status] ?? "bg-gray-100 text-gray-500"}`}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-gray-400 text-xs">
+                    {c.created_at ? format(parseISO(c.created_at), "dd MMM yyyy") : "—"}
+                  </td>
+                  <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      {c.status !== "active" && (
+                        <button
+                          onClick={() => activateMutation.mutate(c.id)}
+                          className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors"
+                          title="Activate"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      {c.status !== "suspended" && (
+                        <button
+                          onClick={() => suspendMutation.mutate(c.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
+                          title="Suspend"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => navigate(`/super-admin/companies/${c.id}`)}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                      >
+                        <ArrowUpRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
     </div>
   );
 }

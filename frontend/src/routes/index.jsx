@@ -17,6 +17,11 @@ import CompaniesPage from "@/super-admin/companies/CompaniesPage";
 import CompanyDetailPage from "@/super-admin/companies/CompanyDetailPage";
 import SubscriptionsPage from "@/super-admin/subscriptions/SubscriptionsPage";
 import MonitoringPage from "@/super-admin/monitoring/MonitoringPage";
+import SecurityPage from "@/super-admin/security/SecurityPage";
+import RBACPage from "@/super-admin/rbac/RBACPage";
+import BillingPage from "@/super-admin/billing/BillingPage";
+import SuperAdminAnalyticsPage from "@/super-admin/analytics/SuperAdminAnalyticsPage";
+import UsersPage from "@/super-admin/users/UsersPage";
 
 // Company Admin pages
 import CompanyAdminDashboard from "@/company-admin/dashboard/CompanyAdminDashboard";
@@ -77,6 +82,11 @@ export default function AppRoutes() {
         <Route path="/super-admin/companies/:id" element={<CompanyDetailPage />} />
         <Route path="/super-admin/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/super-admin/monitoring" element={<MonitoringPage />} />
+        <Route path="/super-admin/security" element={<SecurityPage />} />
+        <Route path="/super-admin/rbac" element={<RBACPage />} />
+        <Route path="/super-admin/billing" element={<BillingPage />} />
+        <Route path="/super-admin/analytics" element={<SuperAdminAnalyticsPage />} />
+        <Route path="/super-admin/users" element={<UsersPage />} />
       </Route>
 
       {/* Company Admin routes */}
