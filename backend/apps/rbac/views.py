@@ -15,9 +15,9 @@ class RoleViewSet(viewsets.ModelViewSet):
         if self.request.user.is_super_admin:
             company_id = self.request.query_params.get("company_id")
             if company_id:
-                return Role.objects.filter(company_id=company_id)
-            return Role.objects.all()
-        return Role.objects.filter(company=self.request.user.company)
+                return Role.objects.filter(company_id=company_id).order_by("display_name", "id")
+            return Role.objects.all().order_by("company_id", "display_name", "id")
+        return Role.objects.filter(company=self.request.user.company).order_by("display_name", "id")
 
     def perform_create(self, serializer):
         if self.request.user.is_super_admin:

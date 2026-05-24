@@ -167,6 +167,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         password = request.data.get("password")
         first_name = request.data.get("first_name", "")
         last_name = request.data.get("last_name", "")
+        phone = request.data.get("phone", "")
         if not email or not password:
             return Response({"detail": "email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(email=email).exists():
@@ -177,6 +178,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
             password=password,
             first_name=first_name,
             last_name=last_name,
+            phone=phone,
             company=company,
             status="active",
         )
@@ -226,11 +228,19 @@ class CompanyViewSet(viewsets.ModelViewSet):
             user.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        allowed_fields = ["first_name", "last_name", "phone", "status"]
+        allowed_fields = ["email", "first_name", "last_name", "phone", "status"]
+        update_fields = []
+        if "email" in request.data and User.objects.exclude(id=user.id).filter(email=request.data["email"]).exists():
+            return Response({"detail": "User with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
         for field in allowed_fields:
             if field in request.data:
                 setattr(user, field, request.data[field])
-        user.save(update_fields=allowed_fields)
+                update_fields.append(field)
+        if "email" in update_fields:
+            user.username = user.email
+            update_fields.append("username")
+        if update_fields:
+            user.save(update_fields=update_fields)
         return Response(CompanyAdminSerializer(user).data)
 
     @action(detail=True, methods=["post"], url_path=r"admins/(?P<user_id>[^/.]+)/reset-password")
@@ -340,10 +350,36 @@ class CompanySettingsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user.is_super_admin:
-            return CompanySettings.objects.all()
-        return CompanySettings.objects.filter(company=self.request.user.company)
+            company_id = self.request.query_params.get("company_id")
+            qs = CompanySettings.objects.select_related("company")
+            if company_id:
+                qs = qs.filter(company_id=company_id)
+            return qs.order_by("company__name", "id")
+        return CompanySettings.objects.filter(company=self.request.user.company).order_by("id")
+
+    def list(self, request, *args, **kwargs):
+        if request.user.is_super_admin:
+            company_id = request.query_params.get("company_id")
+            if company_id:
+                settings, _ = CompanySettings.objects.get_or_create(company_id=company_id)
+                return Response(self.get_serializer(settings).data)
+            return super().list(request, *args, **kwargs)
+        settings, _ = CompanySettings.objects.get_or_create(company=request.user.company)
+        return Response(self.get_serializer(settings).data)
+
+    def partial_update_current(self, request):
+        settings = self.get_object()
+        serializer = self.get_serializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
     def get_object(self):
+        if self.request.user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            if company_id:
+                settings, _ = CompanySettings.objects.get_or_create(company_id=company_id)
+                return settings
         return CompanySettings.objects.get(company=self.request.user.company)
 
 
@@ -355,9 +391,9 @@ class CompanyHolidayViewSet(viewsets.ModelViewSet):
         if self.request.user.is_super_admin:
             company_id = self.request.query_params.get("company_id")
             if company_id:
-                return CompanyHoliday.objects.filter(company_id=company_id)
-            return CompanyHoliday.objects.all()
-        return CompanyHoliday.objects.filter(company=self.request.user.company)
+                return CompanyHoliday.objects.filter(company_id=company_id).order_by("date", "name")
+            return CompanyHoliday.objects.all().order_by("company__name", "date", "name")
+        return CompanyHoliday.objects.filter(company=self.request.user.company).order_by("date", "name")
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)

@@ -53,9 +53,11 @@ import AuditLogsPage from "@/audit-logs/AuditLogsPage";
 
 function ProtectedRoute({ children, requiredRoles = [] }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const isSuperAdmin = useSelector(selectIsSuperAdmin);
   const roles = useSelector(selectUserRoles);
 
   if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
+  if (isSuperAdmin) return <Navigate to="/super-admin/dashboard" replace />;
   if (requiredRoles.length > 0 && !requiredRoles.some((r) => roles.includes(r))) {
     return <Navigate to="/dashboard" replace />;
   }

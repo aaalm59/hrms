@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDispatch } from "react-redux";
 import { setCredentials } from "@/redux/slices/authSlice";
@@ -523,9 +523,10 @@ function EditSubscriptionModal({ company, sub, onClose, onSaved }) {
 export default function CompanyDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const qc = useQueryClient();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => searchParams.get("tab") || "overview");
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [resetUser, setResetUser] = useState(null);
   const [editAdmin, setEditAdmin] = useState(null);
@@ -767,7 +768,10 @@ export default function CompanyDetailPage() {
         {TABS.map(({ id: tid, label, icon: Icon }) => (
           <button
             key={tid}
-            onClick={() => setTab(tid)}
+            onClick={() => {
+              setTab(tid);
+              setSearchParams(tid === "overview" ? {} : { tab: tid });
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${tab === tid ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
           >
             <Icon className="w-3.5 h-3.5" />

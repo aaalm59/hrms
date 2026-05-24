@@ -17,7 +17,7 @@ const NAV_GROUPS = [
   {
     label: "Organizations",
     items: [
-      { to: "/super-admin/companies", icon: Building2, label: "All Organizations" },
+      { to: "/super-admin/companies", icon: Building2, label: "Organizations" },
       { to: "/super-admin/company-admins", icon: UserCheck, label: "Company Admins" },
       { to: "/super-admin/subscriptions", icon: CreditCard, label: "Subscriptions" },
     ],
@@ -123,7 +123,7 @@ export default function SuperAdminSidebar() {
       {/* Footer */}
       <div className="p-3 border-t border-gray-800">
         <NavLink
-          to="/super-admin/settings"
+          to="/super-admin/rbac"
           className={({ isActive }) =>
             clsx(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
@@ -132,7 +132,7 @@ export default function SuperAdminSidebar() {
           }
         >
           <Settings className="w-4 h-4 flex-shrink-0" />
-          {sidebarOpen && <span>Platform Settings</span>}
+          {sidebarOpen && <span>Access Settings</span>}
         </NavLink>
       </div>
     </aside>

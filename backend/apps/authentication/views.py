@@ -106,7 +106,7 @@ class UserListView(generics.ListAPIView):
             qs = qs.filter(is_super_admin=False)
         elif super_admin_filter == "true":
             qs = qs.filter(is_super_admin=True)
-        return qs.order_by("-date_joined")
+        return qs.distinct().order_by("-date_joined")
 
 
 class ImpersonateView(APIView):

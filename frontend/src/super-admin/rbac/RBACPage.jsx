@@ -132,12 +132,12 @@ export default function RBACPage() {
 
   const { data: roles = [], isLoading: rolesLoading } = useQuery({
     queryKey: ["rbac-roles"],
-    queryFn: () => api.get("/rbac/roles/").then(r => r.data),
+    queryFn: () => api.get("/rbac/roles/").then(r => r.data?.results ?? r.data),
   });
 
   const { data: permissions = [] } = useQuery({
     queryKey: ["rbac-permissions"],
-    queryFn: () => api.get("/rbac/permissions/").then(r => r.data),
+    queryFn: () => api.get("/rbac/permissions/").then(r => r.data?.results ?? r.data),
   });
 
   const { data: rolePerms = [], isLoading: rolePermsLoading } = useQuery({
