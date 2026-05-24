@@ -12,6 +12,8 @@ User = get_user_model()
 class TeamSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
     lead_name = serializers.CharField(source="lead.full_name", read_only=True)
+    today_present = serializers.SerializerMethodField()
+    today_absent = serializers.SerializerMethodField()
 
     class Meta:
         model = Team
@@ -19,6 +21,32 @@ class TeamSerializer(serializers.ModelSerializer):
 
     def get_member_count(self, obj):
         return obj.members.filter(is_active=True).count()
+
+    def get_today_present(self, obj):
+        from django.utils import timezone
+        from apps.attendance.models import Attendance
+        today = timezone.now().date()
+        return Attendance.all_objects.filter(
+            company_id=obj.company_id,
+            employee__team=obj,
+            employee__is_active=True,
+            date=today,
+            status__in=["present", "wfh", "half_day"],
+        ).count()
+
+    def get_today_absent(self, obj):
+        from django.utils import timezone
+        from apps.attendance.models import Attendance
+        today = timezone.now().date()
+        total = obj.members.filter(is_active=True).count()
+        accounted = Attendance.all_objects.filter(
+            company_id=obj.company_id,
+            employee__team=obj,
+            employee__is_active=True,
+            date=today,
+            status__in=["present", "wfh", "half_day", "leave"],
+        ).count()
+        return max(0, total - accounted)
 
 
 class DepartmentSerializer(serializers.ModelSerializer):

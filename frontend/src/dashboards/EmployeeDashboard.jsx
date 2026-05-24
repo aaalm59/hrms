@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Clock, Calendar, DollarSign, Bell, CheckCircle, XCircle,
-  ArrowUpRight, MapPin, FileText, TrendingUp, Target
+  ArrowUpRight, MapPin, FileText, TrendingUp, Target, Users, Shield
 } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import api from "@/services/api";
@@ -190,6 +190,86 @@ export default function EmployeeDashboard() {
           </div>
         </div>
       </div>
+
+      {/* My Team */}
+      {data?.team && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">{data.team.name}</h3>
+                {data.team.lead_name && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                    <Shield className="w-3 h-3" />
+                    {data.team.lead_name}
+                  </p>
+                )}
+              </div>
+            </div>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+              {data.team.total_members} members
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {data.team.members.map((member) => (
+              <div
+                key={member.id}
+                className={`flex items-center justify-between p-2.5 rounded-xl ${
+                  member.is_self
+                    ? "bg-primary-50 border border-primary-100"
+                    : "bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
+                    {member.name[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {member.name}
+                      {member.is_self && (
+                        <span className="ml-1.5 text-xs text-primary-500 font-normal">You</span>
+                      )}
+                    </p>
+                    {member.designation && (
+                      <p className="text-xs text-gray-500 truncate">{member.designation}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {member.check_in && (
+                    <span className="text-xs text-gray-400 flex items-center gap-1 hidden sm:flex">
+                      <Clock className="w-3 h-3" />
+                      {member.check_in}
+                    </span>
+                  )}
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      member.attendance_status === "present"
+                        ? "bg-green-100 text-green-700"
+                        : member.attendance_status === "absent"
+                        ? "bg-red-100 text-red-700"
+                        : member.attendance_status === "leave"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : member.attendance_status === "wfh"
+                        ? "bg-blue-100 text-blue-700"
+                        : member.attendance_status === "half_day"
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {member.attendance_status.replace("_", " ")}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Goals in Progress */}
       {myGoals?.results?.length > 0 && (

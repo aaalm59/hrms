@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Clock, DollarSign, Calendar,
   Briefcase, TrendingUp, BarChart2, Bell, Settings,
   Building2, Shield, FileText, Activity, Wallet,
-  BookOpen, Target, ChevronRight
+  BookOpen, Target, ChevronRight, UsersRound
 } from "lucide-react";
 import { selectUserRoles, selectCurrentUser } from "@/redux/slices/authSlice";
 import { clsx } from "clsx";
@@ -22,6 +22,7 @@ const NAV_GROUPS = [
     label: "People",
     items: [
       { to: "/employees", icon: Users, label: "Employees", roles: ["hr_admin", "company_admin", "manager", "team_lead"] },
+      { to: "/teams", icon: UsersRound, label: "Teams", roles: ["hr_admin", "company_admin", "manager", "team_lead"] },
       { to: "/recruitment", icon: Briefcase, label: "Recruitment", roles: ["recruiter", "hr_admin", "company_admin"] },
       { to: "/performance", icon: Target, label: "Performance", roles: ["manager", "hr_admin", "company_admin"] },
     ],

@@ -277,6 +277,48 @@ class EmployeeDashboardView(APIView):
             .values("id", "payroll__month", "payroll__year", "net_salary")[:3]
         )
 
+        # Team data (employee sees only their own team)
+        team_data = None
+        if employee.team_id:
+            employee_with_team = employee.__class__.all_objects.select_related(
+                "team__lead"
+            ).get(pk=employee.pk)
+            team = employee_with_team.team
+            team_members = list(
+                team.members.filter(is_active=True).select_related("designation")
+            )
+            member_ids = [m.id for m in team_members]
+
+            att_map = {
+                a.employee_id: a
+                for a in Attendance.all_objects.filter(
+                    company=request.user.company,
+                    employee_id__in=member_ids,
+                    date=today,
+                )
+            }
+
+            members_data = []
+            for member in team_members:
+                att = att_map.get(member.id)
+                members_data.append({
+                    "id": member.id,
+                    "name": member.full_name,
+                    "is_self": member.id == employee.id,
+                    "designation": member.designation.name if member.designation else None,
+                    "attendance_status": att.status if att else "absent",
+                    "check_in": att.check_in.strftime("%H:%M") if att and att.check_in else None,
+                    "check_out": att.check_out.strftime("%H:%M") if att and att.check_out else None,
+                })
+
+            team_data = {
+                "id": team.id,
+                "name": team.name,
+                "lead_name": team.lead.full_name if team.lead else None,
+                "total_members": len(team_members),
+                "members": members_data,
+            }
+
         return Response({
             "checked_in_today": checked_in,
             "check_in_time": check_in_time,
@@ -286,4 +328,5 @@ class EmployeeDashboardView(APIView):
                 company=request.user.company, employee=employee, status="pending"
             ).count(),
             "recent_payslips": recent_payslips,
+            "team": team_data,
         })

@@ -1,6 +1,7 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.core.permissions import IsHRAdmin, IsManager
@@ -21,10 +22,70 @@ class TeamViewSet(viewsets.ModelViewSet):
     search_fields = ["name"]
 
     def get_queryset(self):
-        return Team.objects.filter(company=self.request.user.company)
+        return Team.objects.filter(company=self.request.user.company).select_related("lead")
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
+
+    @action(detail=True, methods=["get"])
+    def members(self, request, pk=None):
+        from apps.attendance.models import Attendance
+        team = self.get_object()
+        today = timezone.now().date()
+
+        members = list(team.members.filter(is_active=True).select_related("designation"))
+        member_ids = [m.id for m in members]
+
+        attendance_map = {
+            att.employee_id: att
+            for att in Attendance.all_objects.filter(
+                company=request.user.company,
+                employee_id__in=member_ids,
+                date=today,
+            )
+        }
+
+        data = []
+        for emp in members:
+            att = attendance_map.get(emp.id)
+            data.append({
+                "id": emp.id,
+                "employee_id": emp.employee_id,
+                "name": emp.full_name,
+                "email": emp.email,
+                "designation": emp.designation.name if emp.designation else None,
+                "attendance_status": att.status if att else "absent",
+                "check_in": att.check_in.strftime("%H:%M") if att and att.check_in else None,
+                "check_out": att.check_out.strftime("%H:%M") if att and att.check_out else None,
+            })
+
+        return Response({"members": data, "date": today.isoformat()})
+
+    @action(detail=True, methods=["post"])
+    def assign_members(self, request, pk=None):
+        team = self.get_object()
+        employee_ids = request.data.get("employee_ids", [])
+        if not employee_ids:
+            return Response({"detail": "No employee IDs provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated = Employee.objects.filter(
+            company=request.user.company, id__in=employee_ids
+        ).update(team=team)
+
+        return Response({"detail": f"{updated} employees assigned to {team.name}."})
+
+    @action(detail=True, methods=["post"])
+    def remove_member(self, request, pk=None):
+        team = self.get_object()
+        employee_id = request.data.get("employee_id")
+
+        try:
+            emp = Employee.objects.get(company=request.user.company, id=employee_id, team=team)
+            emp.team = None
+            emp.save(update_fields=["team"])
+            return Response({"detail": "Member removed."})
+        except Employee.DoesNotExist:
+            return Response({"detail": "Employee not found in this team."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

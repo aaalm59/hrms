@@ -50,6 +50,7 @@ import SettingsPage from "@/settings/SettingsPage";
 import FinancePage from "@/finance/FinancePage";
 import ReportsPage from "@/reports/ReportsPage";
 import AuditLogsPage from "@/audit-logs/AuditLogsPage";
+import TeamsPage from "@/teams/TeamsPage";
 
 function ProtectedRoute({ children, requiredRoles = [] }) {
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -132,6 +133,7 @@ export default function AppRoutes() {
         <Route path="/performance" element={<PerformancePage />} />
 
         {/* New modules */}
+        <Route path="/teams" element={<TeamsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/reports" element={<ReportsPage />} />
