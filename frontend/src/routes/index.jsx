@@ -1,6 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { selectIsAuthenticated, selectIsSuperAdmin, selectUserRoles } from "@/redux/slices/authSlice";
+import {
+  selectIsAuthenticated,
+  selectIsSuperAdmin,
+  selectUserRoles,
+} from "@/redux/slices/authSlice";
+import { getDashboardPath } from "@/hooks/useAuth";
 
 // Layouts
 import MainLayout from "@/layouts/MainLayout";
@@ -32,9 +37,15 @@ import GlobalPayrollPage from "@/super-admin/global-payroll/GlobalPayrollPage";
 import CompanyAdminDashboard from "@/company-admin/dashboard/CompanyAdminDashboard";
 import CompanySetupPage from "@/company-admin/setup/CompanySetupPage";
 
-// HRMS pages
+// Role dashboards
 import EmployeeDashboard from "@/dashboards/EmployeeDashboard";
 import HRDashboard from "@/dashboards/HRDashboard";
+import PayrollManagerDashboard from "@/dashboards/PayrollManagerDashboard";
+import RecruiterDashboard from "@/dashboards/RecruiterDashboard";
+import ManagerDashboard from "@/dashboards/ManagerDashboard";
+import TeamLeadDashboard from "@/dashboards/TeamLeadDashboard";
+
+// HRMS module pages
 import EmployeesPage from "@/employees/EmployeesPage";
 import EmployeeDetailPage from "@/employees/EmployeeDetailPage";
 import AttendancePage from "@/attendance/AttendancePage";
@@ -45,45 +56,55 @@ import PerformancePage from "@/performance/PerformancePage";
 import AnalyticsPage from "@/analytics/AnalyticsPage";
 import NotificationsPage from "@/notifications/NotificationsPage";
 import SettingsPage from "@/settings/SettingsPage";
-
-// New pages
 import FinancePage from "@/finance/FinancePage";
 import ReportsPage from "@/reports/ReportsPage";
 import AuditLogsPage from "@/audit-logs/AuditLogsPage";
 import TeamsPage from "@/teams/TeamsPage";
 
-function ProtectedRoute({ children, requiredRoles = [] }) {
+// ─── Route Guards ─────────────────────────────────────────────────────────────
+
+function useRoleGuard() {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const isSuperAdmin = useSelector(selectIsSuperAdmin);
   const roles = useSelector(selectUserRoles);
+  return { isAuthenticated, isSuperAdmin, roles };
+}
 
+/** Any authenticated non-super-admin. Optionally require specific roles. */
+function ProtectedRoute({ children, requiredRoles = [] }) {
+  const { isAuthenticated, isSuperAdmin, roles } = useRoleGuard();
   if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
   if (isSuperAdmin) return <Navigate to="/super-admin/dashboard" replace />;
   if (requiredRoles.length > 0 && !requiredRoles.some((r) => roles.includes(r))) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getDashboardPath(roles, false)} replace />;
   }
   return children;
 }
 
+/** Super admin only. */
 function SuperAdminRoute({ children }) {
-  const isAuthenticated = useSelector(selectIsAuthenticated);
-  const isSuperAdmin = useSelector(selectIsSuperAdmin);
+  const { isAuthenticated, isSuperAdmin } = useRoleGuard();
   if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
-  if (!isSuperAdmin) return <Navigate to="/dashboard" replace />;
+  if (!isSuperAdmin) return <Navigate to="/auth/login" replace />;
   return children;
 }
 
-function CompanyAdminRoute({ children }) {
-  const isAuthenticated = useSelector(selectIsAuthenticated);
-  const isSuperAdmin = useSelector(selectIsSuperAdmin);
-  const roles = useSelector(selectUserRoles);
+/** Single-role guard factory — used for each role's dashboard. */
+function RoleRoute({ children, roles: required }) {
+  const { isAuthenticated, isSuperAdmin, roles } = useRoleGuard();
   if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
   if (isSuperAdmin) return <Navigate to="/super-admin/dashboard" replace />;
-  if (!roles.includes("company_admin")) return <Navigate to="/dashboard" replace />;
+  if (!required.some((r) => roles.includes(r))) {
+    return <Navigate to={getDashboardPath(roles, false)} replace />;
+  }
   return children;
 }
 
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
 export default function AppRoutes() {
+  const { isAuthenticated, isSuperAdmin, roles } = useRoleGuard();
+
   return (
     <Routes>
       {/* Public routes */}
@@ -117,7 +138,7 @@ export default function AppRoutes() {
         <Route path="/super-admin/payroll-overview" element={<GlobalPayrollPage />} />
       </Route>
 
-      {/* Company Admin + HR routes (all under MainLayout) */}
+      {/* All company-user routes share MainLayout */}
       <Route
         element={
           <ProtectedRoute>
@@ -125,52 +146,182 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Company Admin — restricted to company_admin role */}
+        {/* ── Role dashboards ─────────────────────────────────────────── */}
         <Route
           path="/company-admin/dashboard"
           element={
-            <CompanyAdminRoute>
+            <RoleRoute roles={["company_admin"]}>
               <CompanyAdminDashboard />
-            </CompanyAdminRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/company-admin/setup"
           element={
-            <CompanyAdminRoute>
+            <RoleRoute roles={["company_admin"]}>
               <CompanySetupPage />
-            </CompanyAdminRoute>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/hr/dashboard"
+          element={
+            <RoleRoute roles={["hr_admin", "company_admin"]}>
+              <HRDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/payroll-manager/dashboard"
+          element={
+            <RoleRoute roles={["payroll_manager", "company_admin", "hr_admin"]}>
+              <PayrollManagerDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/recruiter/dashboard"
+          element={
+            <RoleRoute roles={["recruiter", "hr_admin", "company_admin"]}>
+              <RecruiterDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/manager/dashboard"
+          element={
+            <RoleRoute roles={["manager", "company_admin", "hr_admin"]}>
+              <ManagerDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/team-lead/dashboard"
+          element={
+            <RoleRoute roles={["team_lead", "manager", "company_admin", "hr_admin"]}>
+              <TeamLeadDashboard />
+            </RoleRoute>
+          }
+        />
+        {/* Default employee dashboard (accessible by all authenticated users) */}
+        <Route path="/dashboard" element={<EmployeeDashboard />} />
+
+        {/* ── HR & People ─────────────────────────────────────────────── */}
+        <Route
+          path="/employees"
+          element={
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager"]}>
+              <EmployeesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employees/:id"
+          element={
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager"]}>
+              <EmployeeDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/teams"
+          element={
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead"]}>
+              <TeamsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recruitment"
+          element={
+            <ProtectedRoute requiredRoles={["recruiter", "hr_admin", "company_admin"]}>
+              <RecruitmentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/performance"
+          element={
+            <ProtectedRoute requiredRoles={["manager", "hr_admin", "company_admin"]}>
+              <PerformancePage />
+            </ProtectedRoute>
           }
         />
 
-        {/* Dashboards */}
-        <Route path="/dashboard" element={<EmployeeDashboard />} />
-        <Route path="/hr/dashboard" element={<HRDashboard />} />
-
-        {/* Core HR */}
-        <Route path="/employees" element={<EmployeesPage />} />
-        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+        {/* ── Time & Leave ─────────────────────────────────────────────── */}
         <Route path="/attendance" element={<AttendancePage />} />
-        <Route path="/payroll" element={<PayrollPage />} />
         <Route path="/leaves" element={<LeavesPage />} />
-        <Route path="/recruitment" element={<RecruitmentPage />} />
-        <Route path="/performance" element={<PerformancePage />} />
 
-        {/* New modules */}
-        <Route path="/teams" element={<TeamsPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/finance" element={<FinancePage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/audit-logs" element={<AuditLogsPage />} />
+        {/* ── Finance ─────────────────────────────────────────────────── */}
+        <Route
+          path="/payroll"
+          element={
+            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin"]}>
+              <PayrollPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin"]}>
+              <FinancePage />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* System */}
+        {/* ── Insights ─────────────────────────────────────────────────── */}
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "manager"]}>
+              <AnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "payroll_manager"]}>
+              <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── System ────────────────────────────────────────────────────── */}
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin"]}>
+              <AuditLogsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── Always accessible ────────────────────────────────────────── */}
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 
-      {/* Redirects */}
-      <Route path="/" element={<Navigate to="/auth/login" replace />} />
-      <Route path="*" element={<Navigate to="/auth/login" replace />} />
+      {/* Root — redirect to role dashboard if logged in, else login */}
+      <Route
+        path="/"
+        element={
+          isAuthenticated
+            ? <Navigate to={getDashboardPath(roles, isSuperAdmin)} replace />
+            : <Navigate to="/auth/login" replace />
+        }
+      />
+
+      {/* 404 — redirect to role dashboard or login */}
+      <Route
+        path="*"
+        element={
+          isAuthenticated
+            ? <Navigate to={getDashboardPath(roles, isSuperAdmin)} replace />
+            : <Navigate to="/auth/login" replace />
+        }
+      />
     </Routes>
   );
 }

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Users, Clock, Calendar, AlertCircle, DollarSign,
   Briefcase, TrendingUp, ArrowUpRight, UserCheck, UserX,
-  CheckCircle, RefreshCw
+  CheckCircle, RefreshCw, Building2
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,

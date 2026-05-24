@@ -20,6 +20,24 @@ function parseJwt(token) {
   }
 }
 
+// Role priority order — first match wins
+const ROLE_DASHBOARD = [
+  { role: "company_admin",    path: "/company-admin/dashboard" },
+  { role: "hr_admin",         path: "/hr/dashboard" },
+  { role: "payroll_manager",  path: "/payroll-manager/dashboard" },
+  { role: "recruiter",        path: "/recruiter/dashboard" },
+  { role: "manager",          path: "/manager/dashboard" },
+  { role: "team_lead",        path: "/team-lead/dashboard" },
+];
+
+export function getDashboardPath(roles = [], isSuperAdmin = false) {
+  if (isSuperAdmin) return "/super-admin/dashboard";
+  for (const { role, path } of ROLE_DASHBOARD) {
+    if (roles.includes(role)) return path;
+  }
+  return "/dashboard";
+}
+
 export function useAuth() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -33,14 +51,7 @@ export function useAuth() {
     dispatch(setCredentials(data));
     const decoded = parseJwt(data.access);
     const nextRoles = decoded.roles ?? [];
-    // Route based on role
-    if (decoded.is_super_admin) {
-      navigate("/super-admin/dashboard");
-    } else if (nextRoles.includes("company_admin")) {
-      navigate("/company-admin/dashboard");
-    } else {
-      navigate("/dashboard");
-    }
+    navigate(getDashboardPath(nextRoles, decoded.is_super_admin));
   };
 
   const logoutUser = async () => {
@@ -65,5 +76,6 @@ export function useAuth() {
     logout: logoutUser,
     hasRole,
     hasAnyRole,
+    dashboardPath: getDashboardPath(roles, isSuperAdmin),
   };
 }

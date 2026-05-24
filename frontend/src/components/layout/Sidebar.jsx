@@ -4,57 +4,234 @@ import {
   LayoutDashboard, Users, Clock, DollarSign, Calendar,
   Briefcase, TrendingUp, BarChart2, Bell, Settings,
   Building2, Shield, FileText, Activity, Wallet,
-  BookOpen, Target, ChevronRight, UsersRound
+  Target, UsersRound, UserCog, Search,
 } from "lucide-react";
 import { selectUserRoles, selectCurrentUser } from "@/redux/slices/authSlice";
 import { clsx } from "clsx";
 
-const NAV_GROUPS = [
-  {
-    label: "Overview",
-    items: [
-      { to: "/dashboard", icon: LayoutDashboard, label: "My Dashboard", roles: [] },
-      { to: "/hr/dashboard", icon: Building2, label: "HR Dashboard", roles: ["hr_admin", "company_admin"] },
-      { to: "/company-admin/dashboard", icon: Building2, label: "Company Dashboard", roles: ["company_admin"] },
-    ],
-  },
-  {
-    label: "People",
-    items: [
-      { to: "/employees", icon: Users, label: "Employees", roles: ["hr_admin", "company_admin", "manager", "team_lead"] },
-      { to: "/teams", icon: UsersRound, label: "Teams", roles: ["hr_admin", "company_admin", "manager", "team_lead"] },
-      { to: "/recruitment", icon: Briefcase, label: "Recruitment", roles: ["recruiter", "hr_admin", "company_admin"] },
-      { to: "/performance", icon: Target, label: "Performance", roles: ["manager", "hr_admin", "company_admin"] },
-    ],
-  },
-  {
-    label: "Time & Leave",
-    items: [
-      { to: "/attendance", icon: Clock, label: "Attendance", roles: [] },
-      { to: "/leaves", icon: Calendar, label: "Leaves", roles: [] },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { to: "/payroll", icon: DollarSign, label: "Payroll", roles: ["payroll_manager", "company_admin", "hr_admin"] },
-      { to: "/finance", icon: Wallet, label: "Finance & Budget", roles: ["payroll_manager", "company_admin", "hr_admin"] },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { to: "/analytics", icon: BarChart2, label: "Analytics", roles: ["hr_admin", "company_admin", "manager"] },
-      { to: "/reports", icon: FileText, label: "Reports", roles: ["hr_admin", "company_admin", "payroll_manager"] },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { to: "/audit-logs", icon: Activity, label: "Audit Logs", roles: ["company_admin", "hr_admin"] },
-    ],
-  },
+// ─── Per-role nav definition ──────────────────────────────────────────────────
+// Each role has a curated list of nav groups. Roles at the top of the priority
+// chain can still reach narrower dashboards via their own section.
+
+const ROLE_NAV = {
+  company_admin: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/company-admin/dashboard", icon: Building2, label: "Company Dashboard" },
+        { to: "/hr/dashboard", icon: LayoutDashboard, label: "HR Overview" },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { to: "/employees", icon: Users, label: "Employees" },
+        { to: "/teams", icon: UsersRound, label: "Teams" },
+        { to: "/recruitment", icon: Briefcase, label: "Recruitment" },
+        { to: "/performance", icon: Target, label: "Performance" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: Calendar, label: "Leaves" },
+      ],
+    },
+    {
+      label: "Finance",
+      items: [
+        { to: "/payroll", icon: DollarSign, label: "Payroll" },
+        { to: "/finance", icon: Wallet, label: "Finance & Budget" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/analytics", icon: BarChart2, label: "Analytics" },
+        { to: "/reports", icon: FileText, label: "Reports" },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { to: "/audit-logs", icon: Activity, label: "Audit Logs" },
+        { to: "/company-admin/setup", icon: UserCog, label: "Company Setup" },
+      ],
+    },
+  ],
+
+  hr_admin: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/hr/dashboard", icon: LayoutDashboard, label: "HR Dashboard" },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { to: "/employees", icon: Users, label: "Employees" },
+        { to: "/teams", icon: UsersRound, label: "Teams" },
+        { to: "/recruitment", icon: Briefcase, label: "Recruitment" },
+        { to: "/performance", icon: Target, label: "Performance" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: Calendar, label: "Leaves" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/analytics", icon: BarChart2, label: "Analytics" },
+        { to: "/reports", icon: FileText, label: "Reports" },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { to: "/audit-logs", icon: Activity, label: "Audit Logs" },
+      ],
+    },
+  ],
+
+  payroll_manager: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/payroll-manager/dashboard", icon: DollarSign, label: "Payroll Dashboard" },
+      ],
+    },
+    {
+      label: "Finance",
+      items: [
+        { to: "/payroll", icon: DollarSign, label: "Payroll" },
+        { to: "/finance", icon: Wallet, label: "Finance & Budget" },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { to: "/employees", icon: Users, label: "Employees" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/reports", icon: FileText, label: "Reports" },
+      ],
+    },
+  ],
+
+  recruiter: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/recruiter/dashboard", icon: Search, label: "Recruitment Dashboard" },
+      ],
+    },
+    {
+      label: "Hiring",
+      items: [
+        { to: "/recruitment", icon: Briefcase, label: "Job Posts & Candidates" },
+        { to: "/employees", icon: Users, label: "Employees" },
+      ],
+    },
+  ],
+
+  manager: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/manager/dashboard", icon: LayoutDashboard, label: "Team Dashboard" },
+      ],
+    },
+    {
+      label: "Team",
+      items: [
+        { to: "/employees", icon: Users, label: "Team Members" },
+        { to: "/teams", icon: UsersRound, label: "Teams" },
+        { to: "/performance", icon: Target, label: "Performance" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: Calendar, label: "Leaves" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/analytics", icon: BarChart2, label: "Analytics" },
+      ],
+    },
+  ],
+
+  team_lead: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/team-lead/dashboard", icon: LayoutDashboard, label: "Team Dashboard" },
+      ],
+    },
+    {
+      label: "Team",
+      items: [
+        { to: "/employees", icon: Users, label: "Team Members" },
+        { to: "/teams", icon: UsersRound, label: "Teams" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: Calendar, label: "Leaves" },
+      ],
+    },
+  ],
+
+  employee: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/dashboard", icon: LayoutDashboard, label: "My Dashboard" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: Calendar, label: "Leaves" },
+      ],
+    },
+  ],
+};
+
+// Role priority — first match in user's role list wins for nav selection
+const ROLE_PRIORITY = [
+  "company_admin",
+  "hr_admin",
+  "payroll_manager",
+  "recruiter",
+  "manager",
+  "team_lead",
+  "employee",
 ];
+
+function getNavGroups(roles = []) {
+  for (const role of ROLE_PRIORITY) {
+    if (roles.includes(role)) return ROLE_NAV[role];
+  }
+  return ROLE_NAV.employee;
+}
+
+// ─── NavItem ─────────────────────────────────────────────────────────────────
 
 function NavItem({ to, icon: Icon, label, sidebarOpen }) {
   return (
@@ -68,10 +245,16 @@ function NavItem({ to, icon: Icon, label, sidebarOpen }) {
             : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         )
       }
+      title={!sidebarOpen ? label : undefined}
     >
       {({ isActive }) => (
         <>
-          <Icon className={clsx("w-5 h-5 flex-shrink-0", isActive ? "text-primary-600" : "text-gray-400 group-hover:text-gray-600")} />
+          <Icon
+            className={clsx(
+              "w-5 h-5 flex-shrink-0",
+              isActive ? "text-primary-600" : "text-gray-400 group-hover:text-gray-600"
+            )}
+          />
           {sidebarOpen && <span className="truncate">{label}</span>}
         </>
       )}
@@ -79,14 +262,16 @@ function NavItem({ to, icon: Icon, label, sidebarOpen }) {
   );
 }
 
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+
 export default function Sidebar() {
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
   const roles = useSelector(selectUserRoles);
   const user = useSelector(selectCurrentUser);
   const unreadCount = useSelector((state) => state.notifications.unreadCount);
 
-  const isVisible = (item) =>
-    item.roles.length === 0 || item.roles.some((r) => roles.includes(r));
+  const navGroups = getNavGroups(roles);
+  const primaryRole = ROLE_PRIORITY.find((r) => roles.includes(r)) ?? "employee";
 
   return (
     <aside
@@ -119,7 +304,9 @@ export default function Sidebar() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{user.full_name || user.email}</p>
-              <p className="text-xs text-gray-400 capitalize truncate">{user.roles?.[0]?.replace("_", " ") || "User"}</p>
+              <p className="text-xs text-gray-400 capitalize truncate">
+                {primaryRole.replace(/_/g, " ")}
+              </p>
             </div>
           </div>
         </div>
@@ -127,26 +314,22 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 p-3 space-y-4 overflow-y-auto mt-2">
-        {NAV_GROUPS.map((group) => {
-          const visibleItems = group.items.filter(isVisible);
-          if (visibleItems.length === 0) return null;
-          return (
-            <div key={group.label}>
-              {sidebarOpen && (
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {visibleItems.map(({ to, icon, label }) => (
-                  <NavItem key={to} to={to} icon={icon} label={label} sidebarOpen={sidebarOpen} />
-                ))}
-              </div>
+        {navGroups.map((group) => (
+          <div key={group.label}>
+            {sidebarOpen && (
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map(({ to, icon, label }) => (
+                <NavItem key={to} to={to} icon={icon} label={label} sidebarOpen={sidebarOpen} />
+              ))}
             </div>
-          );
-        })}
+          </div>
+        ))}
 
-        {/* Notifications */}
+        {/* Notifications — always visible */}
         <div>
           {sidebarOpen && (
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1.5">
@@ -155,6 +338,7 @@ export default function Sidebar() {
           )}
           <NavLink
             to="/notifications"
+            title={!sidebarOpen ? "Notifications" : undefined}
             className={({ isActive }) =>
               clsx(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors relative",
@@ -179,10 +363,11 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* Settings */}
-      <div className="p-3 border-t border-gray-100 space-y-0.5">
+      {/* Settings footer — always visible */}
+      <div className="p-3 border-t border-gray-100">
         <NavLink
           to="/settings"
+          title={!sidebarOpen ? "Settings" : undefined}
           className={({ isActive }) =>
             clsx(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",

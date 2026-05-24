@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Count, Sum, Q, Avg
 
-from apps.core.permissions import IsSuperAdmin, IsCompanyAdmin, IsHRAdmin
+from apps.core.permissions import IsSuperAdmin, IsCompanyAdmin, IsHRAdmin, IsPayrollManager, IsRecruiter, IsTeamLead
 
 
 class SuperAdminDashboardView(APIView):
@@ -346,4 +346,309 @@ class EmployeeDashboardView(APIView):
             ).count(),
             "recent_payslips": recent_payslips,
             "team": team_data,
+        })
+
+
+class PayrollManagerDashboardView(APIView):
+    permission_classes = [IsPayrollManager]
+
+    def get(self, request):
+        if request.user.is_super_admin:
+            return Response({"detail": "Use the super admin dashboard."}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.payroll.models import Payroll, Payslip
+        from apps.employees.models import Employee
+        from datetime import date
+
+        company = request.user.company
+        today = timezone.now().date()
+
+        total_employees = Employee.all_objects.filter(company=company, is_active=True).count()
+
+        # Current month payroll
+        current_payroll = Payroll.all_objects.filter(
+            company=company, month=today.month, year=today.year
+        ).first()
+
+        payroll_status = current_payroll.status if current_payroll else "not_started"
+        total_gross = float(current_payroll.total_gross or 0) if current_payroll else 0
+        total_net = float(current_payroll.total_net or 0) if current_payroll else 0
+        employees_processed = current_payroll.payslips.count() if current_payroll else 0
+
+        # Recent payrolls (last 6 months)
+        recent_payrolls = []
+        for i in range(5, -1, -1):
+            month = today.month - i
+            year = today.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            p = Payroll.all_objects.filter(company=company, month=month, year=year).first()
+            import calendar
+            recent_payrolls.append({
+                "label": f"{calendar.month_abbr[month]} {year}",
+                "month": month,
+                "year": year,
+                "status": p.status if p else "not_started",
+                "net_total": float(p.total_net or 0) if p else 0,
+            })
+
+        return Response({
+            "total_employees": total_employees,
+            "employees_on_payroll": employees_processed,
+            "current_month_status": payroll_status,
+            "current_month_gross": total_gross,
+            "current_month_net": total_net,
+            "recent_payrolls": recent_payrolls,
+        })
+
+
+class RecruiterDashboardView(APIView):
+    permission_classes = [IsRecruiter]
+
+    def get(self, request):
+        if request.user.is_super_admin:
+            return Response({"detail": "Use the super admin dashboard."}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.recruitment.models import JobPost, Candidate
+        from apps.employees.models import Employee
+
+        company = request.user.company
+        today = timezone.now().date()
+
+        open_positions = JobPost.all_objects.filter(company=company, status="open").count()
+        closed_positions = JobPost.all_objects.filter(company=company, status="closed").count()
+        total_candidates = Candidate.all_objects.filter(company=company).count()
+
+        active_stages = ["applied", "screening", "interview", "offer"]
+        in_pipeline = Candidate.all_objects.filter(company=company, stage__in=active_stages).count()
+        hired = Candidate.all_objects.filter(company=company, stage="hired").count()
+        rejected = Candidate.all_objects.filter(company=company, stage="rejected").count()
+
+        # Pipeline by stage
+        pipeline_by_stage = []
+        for stage in active_stages:
+            count = Candidate.all_objects.filter(company=company, stage=stage).count()
+            pipeline_by_stage.append({"stage": stage.title(), "count": count})
+
+        # Recent job posts
+        recent_jobs = []
+        for job in JobPost.all_objects.filter(company=company).order_by("-created_at")[:5]:
+            candidates_count = Candidate.all_objects.filter(company=company, job_post=job).count()
+            recent_jobs.append({
+                "id": job.id,
+                "title": job.title,
+                "status": job.status,
+                "candidates": candidates_count,
+                "posted_on": job.created_at.date().isoformat(),
+            })
+
+        return Response({
+            "open_positions": open_positions,
+            "closed_positions": closed_positions,
+            "total_candidates": total_candidates,
+            "in_pipeline": in_pipeline,
+            "hired_total": hired,
+            "rejected_total": rejected,
+            "pipeline_by_stage": pipeline_by_stage,
+            "recent_jobs": recent_jobs,
+        })
+
+
+class ManagerDashboardView(APIView):
+    permission_classes = [IsTeamLead]
+
+    def get(self, request):
+        if request.user.is_super_admin:
+            return Response({"detail": "Use the super admin dashboard."}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.employees.models import Employee, Team
+        from apps.attendance.models import Attendance
+        from apps.leaves.models import LeaveRequest
+        from apps.performance.models import PerformanceReview
+        from datetime import timedelta
+
+        company = request.user.company
+        today = timezone.now().date()
+
+        # Managed teams
+        is_manager = request.user.has_role("manager")
+        if is_manager:
+            teams = Team.all_objects.filter(company=company, lead__user=request.user)
+        else:
+            teams = Team.all_objects.filter(company=company, lead__user=request.user)
+
+        team_ids = list(teams.values_list("id", flat=True))
+        team_members = Employee.all_objects.filter(company=company, team_id__in=team_ids, is_active=True)
+        member_count = team_members.count()
+        member_ids = list(team_members.values_list("id", flat=True))
+
+        # Attendance today
+        attendance_today = Attendance.all_objects.filter(
+            company=company, employee_id__in=member_ids, date=today
+        )
+
+        # Pending leave requests from team
+        pending_leaves = LeaveRequest.all_objects.filter(
+            company=company, employee_id__in=member_ids, status="pending"
+        ).count()
+
+        # Weekly team attendance trend
+        week_trend = []
+        for i in range(4, -1, -1):
+            d = today - timedelta(days=i)
+            day_qs = Attendance.all_objects.filter(company=company, employee_id__in=member_ids, date=d)
+            week_trend.append({
+                "day": d.strftime("%a"),
+                "present": day_qs.filter(status__in=["present", "wfh"]).count(),
+                "absent": day_qs.filter(status="absent").count(),
+                "leave": day_qs.filter(status="leave").count(),
+            })
+
+        return Response({
+            "team_count": teams.count(),
+            "team_member_count": member_count,
+            "present_today": attendance_today.filter(status__in=["present", "wfh"]).count(),
+            "absent_today": attendance_today.filter(status="absent").count(),
+            "on_leave_today": attendance_today.filter(status="leave").count(),
+            "pending_leave_requests": pending_leaves,
+            "attendance_trend": week_trend,
+        })
+
+
+class TeamLeadDashboardView(APIView):
+    permission_classes = [IsTeamLead]
+
+    def get(self, request):
+        if request.user.is_super_admin:
+            return Response({"detail": "Use the super admin dashboard."}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.employees.models import Employee, Team
+        from apps.attendance.models import Attendance
+        from apps.leaves.models import LeaveRequest
+
+        company = request.user.company
+        today = timezone.now().date()
+
+        team = Team.all_objects.filter(company=company, lead__user=request.user).first()
+        if not team:
+            return Response({
+                "team_name": None,
+                "team_member_count": 0,
+                "present_today": 0,
+                "absent_today": 0,
+                "on_leave_today": 0,
+                "pending_leave_requests": 0,
+                "members": [],
+            })
+
+        members = Employee.all_objects.filter(company=company, team=team, is_active=True)
+        member_ids = list(members.values_list("id", flat=True))
+
+        attendance_today = Attendance.all_objects.filter(
+            company=company, employee_id__in=member_ids, date=today
+        )
+        att_map = {a.employee_id: a for a in attendance_today}
+
+        members_data = []
+        for m in members.select_related("designation"):
+            att = att_map.get(m.id)
+            members_data.append({
+                "id": m.id,
+                "name": m.full_name,
+                "designation": m.designation.name if m.designation else None,
+                "attendance_status": att.status if att else "absent",
+                "check_in": att.check_in.strftime("%H:%M") if att and att.check_in else None,
+            })
+
+        pending_leaves = LeaveRequest.all_objects.filter(
+            company=company, employee_id__in=member_ids, status="pending"
+        ).count()
+
+        return Response({
+            "team_name": team.name,
+            "team_member_count": members.count(),
+            "present_today": attendance_today.filter(status__in=["present", "wfh"]).count(),
+            "absent_today": attendance_today.filter(status="absent").count(),
+            "on_leave_today": attendance_today.filter(status="leave").count(),
+            "pending_leave_requests": pending_leaves,
+            "members": members_data,
+        })
+
+
+class TeamCalendarView(APIView):
+    """Return monthly attendance for every member of the current user's team."""
+
+    def get(self, request):
+        from apps.employees.models import Employee, Team
+        from apps.attendance.models import Attendance
+
+        month_str = request.query_params.get("month")
+        try:
+            year, month = map(int, month_str.split("-"))
+        except Exception:
+            today = timezone.now().date()
+            year, month = today.year, today.month
+
+        employee = getattr(request.user, "employee_profile", None)
+        if not employee or not employee.team_id:
+            return Response({"team_name": None, "members": [], "today_stats": {}})
+
+        team = employee.team
+        company_id = request.user.company_id
+
+        members = list(
+            Employee.all_objects.filter(
+                team=team, company_id=company_id, is_active=True
+            ).select_related("designation")
+        )
+        member_ids = [m.id for m in members]
+
+        attendance_qs = Attendance.all_objects.filter(
+            company_id=company_id,
+            employee_id__in=member_ids,
+            date__year=year,
+            date__month=month,
+        )
+
+        att_map = {}
+        for att in attendance_qs:
+            att_map.setdefault(att.employee_id, {})[att.date.isoformat()] = att.status
+
+        today = timezone.now().date()
+        today_str = today.isoformat()
+        on_time, late, wfh, off = 0, 0, 0, []
+
+        members_data = []
+        for m in members:
+            today_status = att_map.get(m.id, {}).get(today_str)
+            if today_status == "present":
+                on_time += 1
+            elif today_status == "wfh":
+                wfh += 1
+            else:
+                off.append(m.full_name)
+
+            members_data.append({
+                "id": m.id,
+                "name": m.full_name,
+                "is_self": m.id == employee.id,
+                "designation": m.designation.name if m.designation else None,
+                "photo": m.photo.url if m.photo and m.photo.name else None,
+                "attendance": att_map.get(m.id, {}),
+            })
+
+        return Response({
+            "team_name": team.name,
+            "team_lead": team.lead.full_name if team.lead else None,
+            "month": month,
+            "year": year,
+            "members": members_data,
+            "today_stats": {
+                "on_time": on_time,
+                "late": late,
+                "wfh": wfh,
+                "off_today": off,
+                "all_in": len(off) == 0,
+            },
         })

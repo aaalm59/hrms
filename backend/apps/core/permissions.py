@@ -59,6 +59,35 @@ class IsManager(BasePermission):
         )
 
 
+class IsRecruiter(BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.is_super_admin
+                or request.user.has_role("company_admin")
+                or request.user.has_role("hr_admin")
+                or request.user.has_role("recruiter")
+            )
+        )
+
+
+class IsTeamLead(BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.is_super_admin
+                or request.user.has_role("company_admin")
+                or request.user.has_role("hr_admin")
+                or request.user.has_role("manager")
+                or request.user.has_role("team_lead")
+            )
+        )
+
+
 class IsSameTenant(BasePermission):
     """Ensures the object belongs to the current user's company."""
 

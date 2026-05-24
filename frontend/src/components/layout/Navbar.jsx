@@ -50,8 +50,10 @@ export default function Navbar({ variant = "default" }) {
           </div>
           <div className="hidden md:block">
             <p className={`text-sm font-medium ${textColor}`}>{user?.full_name || user?.email}</p>
-            <p className={`text-xs ${variant === "super-admin" ? "text-gray-400" : "text-gray-500"}`}>
-              {user?.is_super_admin ? "Super Admin" : user?.roles?.[0] ?? "User"}
+            <p className={`text-xs ${variant === "super-admin" ? "text-gray-400" : "text-gray-500"} capitalize`}>
+              {user?.is_super_admin
+                ? "Super Admin"
+                : (user?.roles?.[0] ?? "User").replace(/_/g, " ")}
             </p>
           </div>
           <button
