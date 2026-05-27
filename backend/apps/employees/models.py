@@ -5,8 +5,14 @@ from apps.core.models import TenantModel
 class Team(TenantModel):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
+    department = models.ForeignKey(
+        "Department", on_delete=models.SET_NULL, null=True, blank=True, related_name="teams"
+    )
     lead = models.ForeignKey(
         "Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="led_teams"
+    )
+    reporting_manager = models.ForeignKey(
+        "Employee", on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_teams"
     )
 
     class Meta:

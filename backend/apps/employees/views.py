@@ -1,5 +1,6 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -15,6 +16,22 @@ from .serializers import (
 from .filters import EmployeeFilter
 
 
+class IsPeopleReadOrHRWrite(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user.is_super_admin:
+            return True
+        write_allowed = user.has_role("company_admin") or user.has_role("hr_admin")
+        if request.method not in SAFE_METHODS:
+            return write_allowed
+        return write_allowed or any(
+            user.has_role(role)
+            for role in ["manager", "team_lead", "recruiter", "payroll_manager"]
+        )
+
+
 def _company_id(request):
     """Return the company_id for the current request user. None for super admins."""
     return None if request.user.is_super_admin else request.user.company_id
@@ -22,7 +39,7 @@ def _company_id(request):
 
 class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
-    permission_classes = [IsHRAdmin]
+    permission_classes = [IsPeopleReadOrHRWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ["name"]
 
@@ -119,7 +136,7 @@ class TeamViewSet(viewsets.ModelViewSet):
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
-    permission_classes = [IsHRAdmin]
+    permission_classes = [IsPeopleReadOrHRWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "code"]
 
@@ -139,7 +156,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class DesignationViewSet(viewsets.ModelViewSet):
     serializer_class = DesignationSerializer
-    permission_classes = [IsHRAdmin]
+    permission_classes = [IsPeopleReadOrHRWrite]
 
     def get_queryset(self):
         cid = _company_id(self.request)
@@ -152,7 +169,7 @@ class DesignationViewSet(viewsets.ModelViewSet):
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsHRAdmin]
+    permission_classes = [IsPeopleReadOrHRWrite]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EmployeeFilter
     search_fields = ["first_name", "last_name", "email", "employee_id", "phone"]

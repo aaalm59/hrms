@@ -21,11 +21,17 @@ const ATTENDANCE_BADGE = {
 
 // ─── Team Form Modal (Create / Edit) ────────────────────────────────────────
 
-function TeamFormModal({ team, employees, onClose }) {
+function TeamFormModal({ team, employees, departments, onClose }) {
   const qc = useQueryClient();
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: team
-      ? { name: team.name, description: team.description || "", lead: team.lead || "" }
+      ? {
+          name: team.name,
+          description: team.description || "",
+          lead: team.lead || "",
+          reporting_manager: team.reporting_manager || "",
+          department: team.department || "",
+        }
       : {},
   });
 
@@ -79,14 +85,37 @@ function TeamFormModal({ team, employees, onClose }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Team Lead</label>
             <select {...register("lead")} className="input">
-              <option value="">Select manager...</option>
+              <option value="">Select team lead...</option>
               {employees?.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.first_name} {e.last_name}
                   {e.designation_name ? ` — ${e.designation_name}` : ""}
                 </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</label>
+            <select {...register("reporting_manager")} className="input">
+              <option value="">Use team lead / employee manager</option>
+              {employees?.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.first_name} {e.last_name}
+                  {e.designation_name ? ` — ${e.designation_name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <select {...register("department")} className="input">
+              <option value="">No department mapping</option>
+              {departments?.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
@@ -402,8 +431,9 @@ function TeamCard({ team, onEdit, onDelete, onManage }) {
         <div className="min-w-0">
           <p className="text-xs text-gray-500">Reporting Manager</p>
           <p className="text-sm font-medium text-gray-800 truncate">
-            {team.lead_name || "Not Assigned"}
+            {team.reporting_manager_name || team.lead_name || "Not Assigned"}
           </p>
+          {team.department_name && <p className="text-xs text-gray-400 truncate">{team.department_name}</p>}
         </div>
       </div>
 
@@ -448,6 +478,13 @@ export default function TeamsPage() {
     queryKey: ["all-employees-flat"],
     queryFn: () =>
       api.get("/employees/?page_size=500").then((r) => r.data?.results ?? r.data),
+    enabled: anyModalOpen,
+  });
+
+  const { data: departments } = useQuery({
+    queryKey: ["departments-flat"],
+    queryFn: () =>
+      api.get("/employees/departments/?page_size=100").then((r) => r.data?.results ?? r.data),
     enabled: anyModalOpen,
   });
 
@@ -538,6 +575,7 @@ export default function TeamsPage() {
         <TeamFormModal
           team={editTeam}
           employees={employees}
+          departments={departments}
           onClose={closeAll}
         />
       )}

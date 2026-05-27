@@ -12,6 +12,8 @@ User = get_user_model()
 class TeamSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
     lead_name = serializers.CharField(source="lead.full_name", read_only=True)
+    reporting_manager_name = serializers.CharField(source="reporting_manager.full_name", read_only=True)
+    department_name = serializers.CharField(source="department.name", read_only=True)
     today_present = serializers.SerializerMethodField()
     today_absent = serializers.SerializerMethodField()
 

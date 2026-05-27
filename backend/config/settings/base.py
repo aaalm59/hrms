@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -169,6 +170,12 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    "leave-policy-daily-credit-run": {
+        "task": "leaves.run_due_leave_credits",
+        "schedule": crontab(minute=5, hour=0),
+    },
+}
 
 # ─── Channels ────────────────────────────────────────────
 CHANNEL_LAYERS = {

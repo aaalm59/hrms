@@ -14,8 +14,8 @@ class TenantMiddleware:
     def __call__(self, request):
         company = None
 
-        if hasattr(request, "auth") and request.auth:
-            payload = request.auth.payload if hasattr(request.auth, "payload") else {}
+        payload = self._jwt_payload(request)
+        if payload:
             is_super_admin = payload.get("is_super_admin", False)
             if not is_super_admin:
                 company_id = payload.get("company_id")
@@ -30,3 +30,18 @@ class TenantMiddleware:
         response = self.get_response(request)
         set_current_company(None)
         return response
+
+    def _jwt_payload(self, request):
+        try:
+            from rest_framework_simplejwt.authentication import JWTAuthentication
+
+            jwt_auth = JWTAuthentication()
+            header = jwt_auth.get_header(request)
+            if not header:
+                return None
+            raw_token = jwt_auth.get_raw_token(header)
+            if not raw_token:
+                return None
+            return jwt_auth.get_validated_token(raw_token).payload
+        except Exception:
+            return None

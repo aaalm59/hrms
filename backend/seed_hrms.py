@@ -278,19 +278,21 @@ for emp_id, fname, lname, email, dept_name, desig_name, gender, doj in employees
 print(f"✅ Employees created: {len(employees_data)}")
 
 # ─── 10. Leave Types ──────────────────────────────────────
-from apps.leaves.models import LeaveType, LeaveBalance
+from apps.leaves.models import LeaveType, LeaveBalance, LeavePolicy
 
 leave_types = [
+    ("Earned Leave", "EL", 12, True, True),
     ("Casual Leave", "CL", 12, True, False),
     ("Sick Leave", "SL", 12, True, False),
     ("Paid Leave", "PL", 18, True, True),
-    ("Emergency Leave", "EL", 3, True, False),
+    ("Emergency Leave", "EM", 3, True, False),
     ("Comp-Off", "CO", 0, True, False),
     ("Maternity Leave", "ML", 180, True, False),
+    ("Floater Leave", "FL", 5, True, False),
 ]
 lt_objs = []
 for name, code, days, paid, carry in leave_types:
-    lt, _ = LeaveType.objects.get_or_create(
+    lt, _ = LeaveType.objects.update_or_create(
         company=company, code=code,
         defaults={
             "name": name,
@@ -301,6 +303,38 @@ for name, code, days, paid, carry in leave_types:
         }
     )
     lt_objs.append(lt)
+
+policy_defaults = {
+    "EL": {
+        "accrual_frequency": "monthly",
+        "credit_amount": 1,
+        "monthly_credit_timing": "month_end",
+        "is_carry_forward_enabled": True,
+        "max_carry_forward_days": 12,
+        "max_balance_days": 0,
+    },
+    "CL": {
+        "accrual_frequency": "monthly",
+        "credit_amount": 1,
+        "monthly_credit_timing": "month_end",
+        "is_carry_forward_enabled": False,
+        "max_carry_forward_days": 0,
+        "max_balance_days": 0,
+    },
+    "FL": {
+        "accrual_frequency": "yearly",
+        "credit_amount": 5,
+        "yearly_credit_month": 1,
+        "yearly_credit_day": 5,
+        "is_carry_forward_enabled": False,
+        "max_carry_forward_days": 0,
+        "max_balance_days": 0,
+    },
+}
+for lt in lt_objs:
+    defaults = policy_defaults.get(lt.code)
+    if defaults:
+        LeavePolicy.objects.update_or_create(company=company, leave_type=lt, defaults={**defaults, "is_active": True})
 
 # Create leave balances for employees
 current_year = datetime.date.today().year
@@ -451,7 +485,7 @@ print("  ───────────────────────�
 print("  Super Admin    → superadmin@hrms.com   / Admin@123")
 print("  Company Admin  → admin@techcorp.in     / Admin@123")
 print("  HR Admin       → hr@techcorp.in        / Admin@123")
-print("  Employee       → arshad@techcorp.in    / Emp@123")
+print("  sEmployee       → arshad@techcorp.in    / Emp@123")
 print("  ─────────────────────────────────────────────────")
 print("  Company: TechCorp India Pvt Ltd")
 print("  Employees: 8 | Leave Types: 6 | Departments: 6")
