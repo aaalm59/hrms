@@ -211,7 +211,7 @@ export default function AppRoutes() {
         <Route
           path="/employees"
           element={
-            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager"]}>
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager", "finance_manager", "auditor"]}>
               <EmployeesPage />
             </ProtectedRoute>
           }
@@ -219,7 +219,7 @@ export default function AppRoutes() {
         <Route
           path="/employees/:id"
           element={
-            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager"]}>
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "manager", "team_lead", "recruiter", "payroll_manager", "finance_manager", "auditor"]}>
               <EmployeeDetailPage />
             </ProtectedRoute>
           }
@@ -257,7 +257,7 @@ export default function AppRoutes() {
         <Route
           path="/payroll"
           element={
-            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin"]}>
+            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin", "finance_manager"]}>
               <PayrollPage />
             </ProtectedRoute>
           }
@@ -265,7 +265,7 @@ export default function AppRoutes() {
         <Route
           path="/finance"
           element={
-            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin"]}>
+            <ProtectedRoute requiredRoles={["payroll_manager", "company_admin", "hr_admin", "finance_manager"]}>
               <FinancePage />
             </ProtectedRoute>
           }
@@ -275,7 +275,7 @@ export default function AppRoutes() {
         <Route
           path="/analytics"
           element={
-            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "manager"]}>
+            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "manager", "finance_manager", "auditor"]}>
               <AnalyticsPage />
             </ProtectedRoute>
           }
@@ -283,7 +283,7 @@ export default function AppRoutes() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "payroll_manager"]}>
+            <ProtectedRoute requiredRoles={["hr_admin", "company_admin", "payroll_manager", "finance_manager", "auditor"]}>
               <ReportsPage />
             </ProtectedRoute>
           }
@@ -293,7 +293,7 @@ export default function AppRoutes() {
         <Route
           path="/audit-logs"
           element={
-            <ProtectedRoute requiredRoles={["company_admin", "hr_admin"]}>
+            <ProtectedRoute requiredRoles={["company_admin", "hr_admin", "auditor"]}>
               <AuditLogsPage />
             </ProtectedRoute>
           }

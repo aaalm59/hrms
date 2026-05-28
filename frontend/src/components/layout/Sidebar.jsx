@@ -1,17 +1,18 @@
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { useQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard, Users, Clock, DollarSign, Calendar,
+  LayoutDashboard, Users, Clock, DollarSign, CalendarDays,
   Briefcase, TrendingUp, BarChart2, Bell, Settings,
   Building2, Shield, FileText, Activity, Wallet,
   Target, UsersRound, UserCog, Search, KeyRound,
 } from "lucide-react";
-import { selectUserRoles, selectCurrentUser } from "@/redux/slices/authSlice";
+import { selectUserRoles, selectCurrentUser, selectIsAuthenticated } from "@/redux/slices/authSlice";
 import { clsx } from "clsx";
+import api from "@/services/api";
 
 // ─── Per-role nav definition ──────────────────────────────────────────────────
-// Each role has a curated list of nav groups. Roles at the top of the priority
-// chain can still reach narrower dashboards via their own section.
+// Each role has a curated list of nav groups.
 
 const ROLE_NAV = {
   company_admin: [
@@ -35,7 +36,7 @@ const ROLE_NAV = {
       label: "Time & Leave",
       items: [
         { to: "/attendance", icon: Clock, label: "Attendance" },
-        { to: "/leaves", icon: Calendar, label: "Leaves" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves", badgeKey: "pendingLeaves" },
       ],
     },
     {
@@ -82,7 +83,7 @@ const ROLE_NAV = {
       label: "Time & Leave",
       items: [
         { to: "/attendance", icon: Clock, label: "Attendance" },
-        { to: "/leaves", icon: Calendar, label: "Leaves" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves", badgeKey: "pendingLeaves" },
       ],
     },
     {
@@ -122,6 +123,13 @@ const ROLE_NAV = {
       ],
     },
     {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves" },
+      ],
+    },
+    {
       label: "Insights",
       items: [
         { to: "/reports", icon: FileText, label: "Reports" },
@@ -141,6 +149,13 @@ const ROLE_NAV = {
       items: [
         { to: "/recruitment", icon: Briefcase, label: "Job Posts & Candidates" },
         { to: "/employees", icon: Users, label: "Employees" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves" },
       ],
     },
   ],
@@ -164,13 +179,14 @@ const ROLE_NAV = {
       label: "Time & Leave",
       items: [
         { to: "/attendance", icon: Clock, label: "Attendance" },
-        { to: "/leaves", icon: Calendar, label: "Leaves" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves", badgeKey: "pendingLeaves" },
       ],
     },
     {
       label: "Insights",
       items: [
         { to: "/analytics", icon: BarChart2, label: "Analytics" },
+        { to: "/reports", icon: FileText, label: "Reports" },
       ],
     },
   ],
@@ -193,7 +209,60 @@ const ROLE_NAV = {
       label: "Time & Leave",
       items: [
         { to: "/attendance", icon: Clock, label: "Attendance" },
-        { to: "/leaves", icon: Calendar, label: "Leaves" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves", badgeKey: "pendingLeaves" },
+      ],
+    },
+  ],
+
+  finance_manager: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+      ],
+    },
+    {
+      label: "Finance",
+      items: [
+        { to: "/finance", icon: Wallet, label: "Finance & Budget" },
+        { to: "/payroll", icon: DollarSign, label: "Payroll" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/analytics", icon: BarChart2, label: "Analytics" },
+        { to: "/reports", icon: FileText, label: "Reports" },
+      ],
+    },
+  ],
+
+  auditor: [
+    {
+      label: "Overview",
+      items: [
+        { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+      ],
+    },
+    {
+      label: "People",
+      items: [
+        { to: "/employees", icon: Users, label: "Employees" },
+      ],
+    },
+    {
+      label: "Time & Leave",
+      items: [
+        { to: "/attendance", icon: Clock, label: "Attendance" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { to: "/analytics", icon: BarChart2, label: "Analytics" },
+        { to: "/reports", icon: FileText, label: "Reports" },
+        { to: "/audit-logs", icon: Activity, label: "Audit Logs" },
       ],
     },
   ],
@@ -209,7 +278,7 @@ const ROLE_NAV = {
       label: "Time & Leave",
       items: [
         { to: "/attendance", icon: Clock, label: "Attendance" },
-        { to: "/leaves", icon: Calendar, label: "Leaves" },
+        { to: "/leaves", icon: CalendarDays, label: "Leaves" },
       ],
     },
   ],
@@ -220,9 +289,11 @@ const ROLE_PRIORITY = [
   "company_admin",
   "hr_admin",
   "payroll_manager",
+  "finance_manager",
   "recruiter",
   "manager",
   "team_lead",
+  "auditor",
   "employee",
 ];
 
@@ -235,7 +306,7 @@ function getNavGroups(roles = []) {
 
 // ─── NavItem ─────────────────────────────────────────────────────────────────
 
-function NavItem({ to, icon: Icon, label, sidebarOpen }) {
+function NavItem({ to, icon: Icon, label, sidebarOpen, badge }) {
   return (
     <NavLink
       to={to}
@@ -251,13 +322,29 @@ function NavItem({ to, icon: Icon, label, sidebarOpen }) {
     >
       {({ isActive }) => (
         <>
-          <Icon
-            className={clsx(
-              "w-5 h-5 flex-shrink-0",
-              isActive ? "text-primary-600" : "text-gray-400 group-hover:text-gray-600"
+          <div className="relative flex-shrink-0">
+            <Icon
+              className={clsx(
+                "w-5 h-5",
+                isActive ? "text-primary-600" : "text-gray-400 group-hover:text-gray-600"
+              )}
+            />
+            {badge > 0 && !sidebarOpen && (
+              <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-[9px] font-bold text-white flex items-center justify-center">
+                {badge > 9 ? "9+" : badge}
+              </span>
             )}
-          />
-          {sidebarOpen && <span className="truncate">{label}</span>}
+          </div>
+          {sidebarOpen && (
+            <span className="flex flex-1 items-center justify-between truncate">
+              <span className="truncate">{label}</span>
+              {badge > 0 && (
+                <span className="ml-1 flex-shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -270,7 +357,21 @@ export default function Sidebar() {
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
   const roles = useSelector(selectUserRoles);
   const user = useSelector(selectCurrentUser);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
   const unreadCount = useSelector((state) => state.notifications.unreadCount);
+
+  const canApprove = roles?.some((r) => ["company_admin", "hr_admin", "manager", "team_lead"].includes(r));
+
+  const { data: leaveDashboard } = useQuery({
+    queryKey: ["leave-dashboard-sidebar"],
+    queryFn: () => api.get("/leaves/dashboard/").then((r) => r.data),
+    enabled: !!isAuthenticated && canApprove,
+    refetchInterval: 120000, // refresh every 2 min
+    staleTime: 60000,
+  });
+
+  const pendingLeaves = leaveDashboard?.pending_approvals ?? 0;
+  const badges = { pendingLeaves };
 
   const navGroups = getNavGroups(roles);
   const primaryRole = ROLE_PRIORITY.find((r) => roles.includes(r)) ?? "employee";
@@ -324,8 +425,15 @@ export default function Sidebar() {
               </p>
             )}
             <div className="space-y-0.5">
-              {group.items.map(({ to, icon, label }) => (
-                <NavItem key={to} to={to} icon={icon} label={label} sidebarOpen={sidebarOpen} />
+              {group.items.map(({ to, icon, label, badgeKey }) => (
+                <NavItem
+                  key={to}
+                  to={to}
+                  icon={icon}
+                  label={label}
+                  sidebarOpen={sidebarOpen}
+                  badge={badgeKey ? (badges[badgeKey] || 0) : 0}
+                />
               ))}
             </div>
           </div>

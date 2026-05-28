@@ -610,6 +610,16 @@ export default function CompanyDetailPage() {
     onSuccess: () => { toast.success("Suspended"); qc.invalidateQueries(["company-detail", id]); },
   });
 
+  const setupMutation = useMutation({
+    mutationFn: () => api.post(`/companies/${id}/setup/`).then(r => r.data),
+    onSuccess: (data) => {
+      toast.success(`Setup complete! ${data.summary?.departments} depts, ${data.summary?.roles} roles, ${data.summary?.users?.length} demo users`);
+      qc.invalidateQueries(["company-detail", id]);
+      qc.invalidateQueries(["company-stats", id]);
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || "Setup failed"),
+  });
+
   const impersonateMutation = useMutation({
     mutationFn: () => api.post(`/companies/${id}/login-as-admin/`).then(r => r.data),
     onSuccess: (data) => {
@@ -726,6 +736,16 @@ export default function CompanyDetailPage() {
               className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors"
             >
               <UserPlus className="w-4 h-4" /> Add Admin
+            </button>
+            <button
+              onClick={() => setupMutation.mutate()}
+              disabled={setupMutation.isPending}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-sm font-medium transition-colors"
+              title="Auto-configure departments, roles, permissions, demo users, leave types"
+            >
+              {setupMutation.isPending
+                ? <><RotateCcw className="w-4 h-4 animate-spin" /> Setting up…</>
+                : <><Settings className="w-4 h-4" /> Run Setup</>}
             </button>
             <button
               onClick={() => impersonateMutation.mutate()}

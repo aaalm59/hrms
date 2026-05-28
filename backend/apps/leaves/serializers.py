@@ -21,6 +21,10 @@ class LeaveTypeSerializer(serializers.ModelSerializer):
 
 class LeaveBalanceSerializer(serializers.ModelSerializer):
     leave_type_name = serializers.CharField(source="leave_type.name", read_only=True)
+    leave_type_code = serializers.CharField(source="leave_type.code", read_only=True)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_id_code = serializers.CharField(source="employee.employee_id", read_only=True)
+    department_name = serializers.CharField(source="employee.department.name", read_only=True)
     available_days = serializers.ReadOnlyField()
 
     class Meta:
@@ -61,18 +65,15 @@ class LeavePolicySerializer(serializers.ModelSerializer):
         leave_type.max_negative_days = policy.max_negative_days
         leave_type.days_per_year = max(leave_type.days_per_year, policy.credit_amount)
         leave_type.save(update_fields=[
-            "is_carry_forwardable",
-            "max_carry_forward_days",
-            "allow_negative_balance",
-            "max_negative_days",
-            "days_per_year",
-            "updated_at",
+            "is_carry_forwardable", "max_carry_forward_days",
+            "allow_negative_balance", "max_negative_days", "days_per_year", "updated_at",
         ])
         return policy
 
 
 class LeaveTransactionSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_id_code = serializers.CharField(source="employee.employee_id", read_only=True)
     leave_type_name = serializers.CharField(source="leave_type.name", read_only=True)
     leave_type_code = serializers.CharField(source="leave_type.code", read_only=True)
 
@@ -95,6 +96,7 @@ class LeaveCreditLogSerializer(serializers.ModelSerializer):
 
 class LeaveApprovalSerializer(serializers.ModelSerializer):
     approver_name = serializers.SerializerMethodField()
+    approver_role_display = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveApproval
@@ -108,16 +110,30 @@ class LeaveApprovalSerializer(serializers.ModelSerializer):
             return obj.approver.get_full_name() or obj.approver.email
         return "Unassigned"
 
+    def get_approver_role_display(self, obj):
+        role_map = {
+            "team_lead": "Team Lead",
+            "reporting_manager": "Reporting Manager",
+            "manager": "Manager",
+            "hr_admin": "HR Admin",
+            "company_admin": "Company Admin",
+        }
+        return role_map.get(obj.role, obj.role.replace("_", " ").title())
+
 
 class LeaveRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_id_code = serializers.CharField(source="employee.employee_id", read_only=True)
     employee_department = serializers.CharField(source="employee.department.name", read_only=True)
+    employee_team = serializers.CharField(source="employee.team.name", read_only=True)
     leave_type_name = serializers.CharField(source="leave_type.name", read_only=True)
+    leave_type_code = serializers.CharField(source="leave_type.code", read_only=True)
     reviewed_by_name = serializers.CharField(source="reviewed_by.get_full_name", read_only=True)
     applied_on = serializers.DateTimeField(source="created_at", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
     approvals = LeaveApprovalSerializer(many=True, read_only=True)
     current_approver_name = serializers.SerializerMethodField()
+    can_approve = serializers.SerializerMethodField()
 
     class Meta:
         model = LeaveRequest
@@ -129,12 +145,29 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
 
     def get_current_approver_name(self, obj):
         approval = next(
-            (item for item in obj.approvals.all() if item.level == obj.current_approval_level and item.status == "pending"),
+            (item for item in obj.approvals.all()
+             if item.level == obj.current_approval_level and item.status == "pending"),
             None,
         )
         if not approval:
             return None
         return LeaveApprovalSerializer().get_approver_name(approval)
+
+    def get_can_approve(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        user = request.user
+        if user.is_super_admin or user.has_role("company_admin") or user.has_role("hr_admin"):
+            return obj.status in ["pending", "manager_approved", "escalated"]
+        current_approval = next(
+            (item for item in obj.approvals.all()
+             if item.level == obj.current_approval_level and item.status == "pending"),
+            None,
+        )
+        if current_approval and current_approval.approver_id == user.id:
+            return obj.status in ["pending", "manager_approved", "escalated"]
+        return False
 
     def validate(self, attrs):
         from_date = attrs.get("from_date", getattr(self.instance, "from_date", None))
@@ -158,7 +191,9 @@ class LeaveActionSerializer(serializers.Serializer):
 
 class ReportingManagerSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_id_code = serializers.CharField(source="employee.employee_id", read_only=True)
     manager_name = serializers.CharField(source="manager.full_name", read_only=True)
+    manager_id_code = serializers.CharField(source="manager.employee_id", read_only=True)
 
     class Meta:
         model = ReportingManager

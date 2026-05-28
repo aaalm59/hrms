@@ -13,7 +13,12 @@ class SalaryStructureViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPayrollManager]
 
     def get_queryset(self):
-        return SalaryStructure.objects.filter(company=self.request.user.company)
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = SalaryStructure.all_objects.all()
+            return qs.filter(company_id=company_id) if company_id else qs
+        return SalaryStructure.objects.filter(company=user.company)
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
@@ -24,7 +29,17 @@ class EmployeeSalaryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPayrollManager]
 
     def get_queryset(self):
-        return EmployeeSalary.objects.filter(company=self.request.user.company).select_related("employee")
+        user = self.request.user
+        if user.is_super_admin:
+            company_id = self.request.query_params.get("company_id")
+            qs = EmployeeSalary.all_objects.all()
+            if company_id:
+                qs = qs.filter(company_id=company_id)
+            emp_id = self.request.query_params.get("employee_id")
+            if emp_id:
+                qs = qs.filter(employee_id=emp_id)
+            return qs.select_related("employee")
+        return EmployeeSalary.objects.filter(company=user.company).select_related("employee")
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)

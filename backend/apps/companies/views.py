@@ -17,6 +17,7 @@ from .serializers import (
     CompanyHolidaySerializer,
     CompanyAdminSerializer,
 )
+from .auto_setup import auto_setup_company
 
 User = get_user_model()
 
@@ -46,11 +47,21 @@ class CompanyViewSet(viewsets.ModelViewSet):
             slug = f"{base_slug}-{suffix}"
         company = serializer.save(slug=slug)
         # Auto-create default settings
-        CompanySettings.objects.create(
+        CompanySettings.objects.get_or_create(
             company=company,
-            working_days=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-            weekly_off_days=["Saturday", "Sunday"],
+            defaults={
+                "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                "weekly_off_days": ["Saturday", "Sunday"],
+            },
         )
+        # Full auto-setup: roles, perms, depts, teams, demo users, leave types
+        try:
+            auto_setup_company(company, created_by=self.request.user)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "auto_setup_company failed for '%s': %s", company.name, exc, exc_info=True
+            )
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
@@ -341,6 +352,28 @@ class CompanyViewSet(viewsets.ModelViewSet):
             "user_email": admin_user.email,
             "user_name": admin_user.get_full_name(),
             "company": company.name,
+        })
+
+
+    @action(detail=True, methods=["post"])
+    def setup(self, request, pk=None):
+        """
+        POST /companies/{id}/setup/
+        Re-run (or run for the first time) the full company auto-setup:
+          departments, designations, teams, system roles, permissions, demo users, leave types.
+        Safe to call multiple times — uses get_or_create throughout.
+        """
+        company = self.get_object()
+        try:
+            summary = auto_setup_company(company, created_by=request.user)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Setup failed: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response({
+            "detail": "Company setup completed successfully.",
+            "summary": summary,
         })
 
 

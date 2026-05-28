@@ -3,11 +3,38 @@ import io
 from datetime import date
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status as http_status
 from django.http import HttpResponse
 from django.db.models import Count, Sum, Q, Avg
 from django.utils import timezone
 
 from apps.core.permissions import IsHRAdmin
+
+
+def _resolve_company(request):
+    """
+    Returns the Company for the current request.
+    - Regular users  → their own company (from JWT)
+    - Super Admin    → must pass ?company_id=<id> query param
+    Returns (company, error_response) — error_response is None on success.
+    """
+    user = request.user
+    if user.is_super_admin:
+        company_id = request.query_params.get("company_id")
+        if not company_id:
+            return None, Response(
+                {"detail": "Super admin must supply ?company_id= to scope this report."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        from apps.companies.models import Company
+        try:
+            return Company.objects.get(pk=company_id, is_active=True), None
+        except Company.DoesNotExist:
+            return None, Response(
+                {"detail": "Company not found."},
+                status=http_status.HTTP_404_NOT_FOUND,
+            )
+    return user.company, None
 
 
 class AttendanceReportView(APIView):
@@ -17,7 +44,9 @@ class AttendanceReportView(APIView):
         from apps.attendance.models import Attendance
         from apps.employees.models import Employee
 
-        company = request.user.company
+        company, err = _resolve_company(request)
+        if err:
+            return err
         month = int(request.query_params.get("month", timezone.now().month))
         year = int(request.query_params.get("year", timezone.now().year))
         department_id = request.query_params.get("department")
@@ -82,7 +111,9 @@ class LeaveReportView(APIView):
         from apps.leaves.models import LeaveRequest, LeaveBalance, LeaveType
         from apps.employees.models import Employee
 
-        company = request.user.company
+        company, err = _resolve_company(request)
+        if err:
+            return err
         year = int(request.query_params.get("year", timezone.now().year))
         department_id = request.query_params.get("department")
         export = request.query_params.get("export")
@@ -141,7 +172,9 @@ class PayrollReportView(APIView):
     def get(self, request):
         from apps.payroll.models import Payroll, Payslip
 
-        company = request.user.company
+        company, err = _resolve_company(request)
+        if err:
+            return err
         year = int(request.query_params.get("year", timezone.now().year))
         export = request.query_params.get("export")
 
@@ -190,7 +223,9 @@ class HeadcountReportView(APIView):
     def get(self, request):
         from apps.employees.models import Employee, Department
 
-        company = request.user.company
+        company, err = _resolve_company(request)
+        if err:
+            return err
         today = timezone.now().date()
 
         by_dept = []

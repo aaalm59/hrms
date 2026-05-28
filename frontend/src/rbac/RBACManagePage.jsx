@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import {
   Shield, Plus, Edit2, Trash2, Save, Lock, Check,
-  Users, UserPlus, UserMinus, ChevronDown,
+  Users, UserPlus, UserMinus, ChevronDown, Sparkles, RefreshCw,
 } from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
@@ -282,7 +282,8 @@ function RolesPermissionsPanel() {
                     {modules.length === 0 ? (
                       <tr>
                         <td colSpan={ACTIONS.length + 2} className="text-center py-10 text-gray-400">
-                          No permissions seeded yet. Use Django admin to seed permissions.
+                          <p className="font-medium text-gray-500">No permissions configured yet</p>
+                          <p className="text-xs mt-1">Click <strong>"Seed Standard Permissions"</strong> at the top of the page to create all module:action permissions automatically.</p>
                         </td>
                       </tr>
                     ) : (
@@ -558,12 +559,34 @@ function AssignRoleModal({ roles, employees, onClose }) {
 
 export default function RBACManagePage() {
   const [activeTab, setActiveTab] = useState(0);
+  const qc = useQueryClient();
+
+  const seedMutation = useMutation({
+    mutationFn: () => api.post("/rbac/seed-permissions/"),
+    onSuccess: (res) => {
+      toast.success(`Permissions seeded: ${res.data?.total_permissions} perms, ${res.data?.roles_created} new roles`);
+      qc.invalidateQueries({ queryKey: ["rbac-roles-company"] });
+      qc.invalidateQueries({ queryKey: ["rbac-perms-company"] });
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || "Seed failed"),
+  });
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Roles & Access Control</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage roles, permissions, and user role assignments for your organisation</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Roles & Access Control</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage roles, permissions, and user role assignments for your organisation</p>
+        </div>
+        <button
+          onClick={() => seedMutation.mutate()}
+          disabled={seedMutation.isPending}
+          className="flex shrink-0 items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          title="Create all standard module:action permissions and assign defaults to system roles"
+        >
+          {seedMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {seedMutation.isPending ? "Seeding…" : "Seed Standard Permissions"}
+        </button>
       </div>
 
       {/* Tabs */}
@@ -587,4 +610,5 @@ export default function RBACManagePage() {
       {activeTab === 1 && <UserRolesPanel />}
     </div>
   );
+
 }

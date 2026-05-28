@@ -9,5 +9,7 @@ router.register("user-roles", views.UserRoleViewSet, basename="user-role")
 
 urlpatterns = [
     path("my-permissions/", views.MyPermissionsView.as_view(), name="my-permissions"),
+    path("seed-permissions/", views.SeedPermissionsView.as_view(), name="seed-permissions"),
+    path("dashboard-config/", views.DashboardConfigView.as_view(), name="dashboard-config"),
     path("", include(router.urls)),
 ]
