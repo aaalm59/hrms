@@ -248,11 +248,51 @@ class HRDashboardView(APIView):
         })
 
 
+def _scoped_employee_queryset(user):
+    from apps.employees.models import Employee
+
+    if user.is_super_admin:
+        return Employee.all_objects.none()
+    qs = Employee.all_objects.filter(company=user.company, is_active=True).select_related("department", "designation", "team")
+    if user.has_role("company_admin") or user.has_role("hr_admin"):
+        return qs
+    employee = getattr(user, "employee_profile", None)
+    if not employee:
+        return qs.none()
+    if user.has_role("manager") or user.has_role("team_lead"):
+        return qs.filter(
+            Q(id=employee.id)
+            | Q(reporting_manager=employee)
+            | Q(team__lead=employee)
+            | Q(team__reporting_manager=employee)
+        ).distinct()
+    if employee.team_id:
+        return qs.filter(team_id=employee.team_id)
+    return qs.filter(id=employee.id)
+
+
+def _weekly_off_indexes(company):
+    day_map = {
+        "Monday": 0,
+        "Tuesday": 1,
+        "Wednesday": 2,
+        "Thursday": 3,
+        "Friday": 4,
+        "Saturday": 5,
+        "Sunday": 6,
+    }
+    settings = getattr(company, "settings", None)
+    weekly = getattr(settings, "weekly_off_days", None) or ["Saturday", "Sunday"]
+    return [day_map.get(day, 6) for day in weekly]
+
+
 class EmployeeDashboardView(APIView):
     def get(self, request):
         from apps.attendance.models import Attendance
-        from apps.leaves.models import LeaveBalance, LeaveRequest
+        from apps.leaves.models import Holiday, LeaveBalance, LeaveRequest
         from apps.payroll.models import Payslip
+        from apps.attendance.models import Shift
+        from datetime import timedelta
 
         employee = getattr(request.user, 'employee_profile', None)
         if not employee:
@@ -260,92 +300,162 @@ class EmployeeDashboardView(APIView):
 
         today = timezone.now().date()
         current_year = today.year
+        company = request.user.company
+        scoped_employees = _scoped_employee_queryset(request.user)
+        scoped_ids = list(scoped_employees.values_list("id", flat=True))
 
         checked_in = False
         check_in_time = None
+        check_out_time = None
         working_hours_today = None
+        late_alert = None
+        attendance_today = None
 
         try:
             attendance_today = Attendance.all_objects.get(
-                company=request.user.company, employee=employee, date=today
+                company=company, employee=employee, date=today
             )
             checked_in = bool(attendance_today.check_in)
             if attendance_today.check_in:
                 check_in_time = attendance_today.check_in.strftime("%H:%M")
+            if attendance_today.check_out:
+                check_out_time = attendance_today.check_out.strftime("%H:%M")
             if attendance_today.working_hours:
                 working_hours_today = float(attendance_today.working_hours)
+            if attendance_today.is_late:
+                late_alert = f"Late by {attendance_today.late_minutes} minutes"
         except Attendance.DoesNotExist:
             pass
 
+        active_shift = (
+            attendance_today.shift if attendance_today and attendance_today.shift_id
+            else Shift.all_objects.filter(company=company).order_by("start_time").first()
+        )
+
         leave_balances = list(
             LeaveBalance.all_objects.filter(
-                company=request.user.company, employee=employee, year=current_year
-            ).values("leave_type__name", "total_days", "used_days")
+                company=company, employee=employee, year=current_year
+            ).values("leave_type__name", "leave_type__code", "total_days", "used_days", "pending_days", "carried_forward")
         )
 
         recent_payslips = list(
             Payslip.all_objects.filter(
-                company=request.user.company, employee=employee
+                company=company, employee=employee
             ).order_by("-created_at")
             .values("id", "payroll__month", "payroll__year", "net_salary")[:3]
         )
 
-        # Team data (employee sees only their own team)
-        team_data = None
-        if employee.team_id:
-            from apps.employees.models import Team, Employee as EmpModel
-            employee_with_team = EmpModel.all_objects.select_related(
-                "team__lead"
-            ).get(pk=employee.pk)
-            team = employee_with_team.team
-            # Explicit company_id filter — never use reverse FK manager
-            team_members = list(
-                EmpModel.all_objects.filter(
-                    team=team, company_id=request.user.company_id, is_active=True
-                ).select_related("designation")
-            )
-            member_ids = [m.id for m in team_members]
+        attendance_scope_today = Attendance.all_objects.filter(company=company, employee_id__in=scoped_ids, date=today)
+        attendance_map = {item.employee_id: item for item in attendance_scope_today}
+        approved_leaves_today = LeaveRequest.all_objects.filter(
+            company=company,
+            employee_id__in=scoped_ids,
+            status=LeaveRequest.Status.APPROVED,
+            from_date__lte=today,
+            to_date__gte=today,
+        )
+        leave_employee_ids = set(approved_leaves_today.values_list("employee_id", flat=True))
+        present_ids = set(attendance_scope_today.filter(status=Attendance.Status.PRESENT).values_list("employee_id", flat=True))
+        wfh_ids = set(attendance_scope_today.filter(status=Attendance.Status.WORK_FROM_HOME).values_list("employee_id", flat=True))
+        late_ids = set(attendance_scope_today.filter(is_late=True).values_list("employee_id", flat=True))
+        remote_ids = set(attendance_scope_today.filter(check_in_location__isnull=False).values_list("employee_id", flat=True))
+        team_available = len(set(scoped_ids) - leave_employee_ids - set(attendance_scope_today.filter(status=Attendance.Status.ABSENT).values_list("employee_id", flat=True)))
 
-            att_map = {
-                a.employee_id: a
-                for a in Attendance.all_objects.filter(
-                    company=request.user.company,
-                    employee_id__in=member_ids,
-                    date=today,
-                )
-            }
+        members_data = []
+        for member in scoped_employees[:40]:
+            att = attendance_map.get(member.id)
+            members_data.append({
+                "id": member.id,
+                "name": member.full_name,
+                "is_self": member.id == employee.id,
+                "designation": member.designation.name if member.designation else None,
+                "team": member.team.name if member.team else None,
+                "attendance_status": "leave" if member.id in leave_employee_ids else (att.status if att else "not_marked"),
+                "check_in": att.check_in.strftime("%H:%M") if att and att.check_in else None,
+                "check_out": att.check_out.strftime("%H:%M") if att and att.check_out else None,
+                "is_late": bool(att and att.is_late),
+                "is_remote": bool(att and att.check_in_location),
+            })
 
-            members_data = []
-            for member in team_members:
-                att = att_map.get(member.id)
-                members_data.append({
-                    "id": member.id,
-                    "name": member.full_name,
-                    "is_self": member.id == employee.id,
-                    "designation": member.designation.name if member.designation else None,
-                    "attendance_status": att.status if att else "absent",
-                    "check_in": att.check_in.strftime("%H:%M") if att and att.check_in else None,
-                    "check_out": att.check_out.strftime("%H:%M") if att and att.check_out else None,
-                })
+        history = []
+        for item in Attendance.all_objects.filter(company=company, employee=employee).select_related("shift").order_by("-date")[:10]:
+            history.append({
+                "date": item.date.isoformat(),
+                "status": item.status,
+                "check_in": item.check_in.strftime("%H:%M") if item.check_in else None,
+                "check_out": item.check_out.strftime("%H:%M") if item.check_out else None,
+                "working_hours": float(item.working_hours or 0),
+                "is_late": item.is_late,
+                "late_minutes": item.late_minutes,
+                "shift": item.shift.name if item.shift else None,
+            })
 
-            team_data = {
-                "id": team.id,
-                "name": team.name,
-                "lead_name": team.lead.full_name if team.lead else None,
-                "total_members": len(team_members),
-                "members": members_data,
-            }
+        attendance_trend = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            day_qs = Attendance.all_objects.filter(company=company, employee_id__in=scoped_ids, date=day)
+            attendance_trend.append({
+                "day": day.strftime("%a"),
+                "date": day.isoformat(),
+                "present": day_qs.filter(status=Attendance.Status.PRESENT).count(),
+                "wfh": day_qs.filter(status=Attendance.Status.WORK_FROM_HOME).count(),
+                "late": day_qs.filter(is_late=True).count(),
+                "absent": day_qs.filter(status=Attendance.Status.ABSENT).count(),
+            })
+
+        leave_trend = []
+        for month in range(1, 13):
+            month_qs = LeaveRequest.all_objects.filter(company=company, employee_id__in=scoped_ids, from_date__year=current_year, from_date__month=month)
+            leave_trend.append({
+                "month": month,
+                "approved": month_qs.filter(status=LeaveRequest.Status.APPROVED).count(),
+                "pending": month_qs.filter(status__in=[LeaveRequest.Status.PENDING, LeaveRequest.Status.MANAGER_APPROVED, LeaveRequest.Status.ESCALATED]).count(),
+            })
+
+        holidays_this_month = list(
+            Holiday.all_objects.filter(company=company, is_active=True, date__year=today.year, date__month=today.month)
+            .values("name", "date", "holiday_type")
+        )
 
         return Response({
             "checked_in_today": checked_in,
             "check_in_time": check_in_time,
+            "check_out_time": check_out_time,
             "working_hours_today": working_hours_today,
+            "live_working_seconds": int((timezone.now() - attendance_today.check_in).total_seconds()) if attendance_today and attendance_today.check_in and not attendance_today.check_out else 0,
+            "late_alert": late_alert,
+            "today_status": attendance_today.status if attendance_today else "not_marked",
+            "shift": {
+                "name": active_shift.name if active_shift else None,
+                "start_time": active_shift.start_time.strftime("%H:%M") if active_shift else None,
+                "end_time": active_shift.end_time.strftime("%H:%M") if active_shift else None,
+                "grace_minutes": active_shift.grace_minutes if active_shift else None,
+            },
             "leave_balances": leave_balances,
             "pending_leave_requests": LeaveRequest.all_objects.filter(
-                company=request.user.company, employee=employee, status="pending"
+                company=company, employee=employee, status__in=["pending", "manager_approved", "escalated"]
             ).count(),
             "recent_payslips": recent_payslips,
-            "team": team_data,
+            "team": {
+                "id": employee.team_id,
+                "name": employee.team.name if employee.team else "My Team",
+                "lead_name": employee.team.lead.full_name if employee.team and employee.team.lead else None,
+                "total_members": len(scoped_ids),
+                "members": members_data,
+            },
+            "widgets": {
+                "employees_on_time": len(present_ids - late_ids),
+                "late_arrivals": len(late_ids),
+                "work_from_home": len(wfh_ids),
+                "remote_clockins": len(remote_ids),
+                "team_available": team_available,
+                "team_total": len(scoped_ids),
+                "on_leave": len(leave_employee_ids),
+            },
+            "attendance_history": history,
+            "attendance_trend": attendance_trend,
+            "leave_trend": leave_trend,
+            "holidays_this_month": holidays_this_month,
         })
 
 
@@ -577,11 +687,13 @@ class TeamLeadDashboardView(APIView):
 
 
 class TeamCalendarView(APIView):
-    """Return monthly attendance for every member of the current user's team."""
+    """Return a role-scoped monthly calendar with attendance, leaves, holidays and weekly offs."""
 
     def get(self, request):
-        from apps.employees.models import Employee, Team
         from apps.attendance.models import Attendance
+        from apps.leaves.models import Holiday, LeaveRequest
+        from datetime import timedelta
+        import calendar
 
         month_str = request.query_params.get("month")
         try:
@@ -591,18 +703,17 @@ class TeamCalendarView(APIView):
             year, month = today.year, today.month
 
         employee = getattr(request.user, "employee_profile", None)
-        if not employee or not employee.team_id:
+        if not employee and not (request.user.has_role("company_admin") or request.user.has_role("hr_admin")):
             return Response({"team_name": None, "members": [], "today_stats": {}})
 
-        team = employee.team
         company_id = request.user.company_id
+        company = request.user.company
 
-        members = list(
-            Employee.all_objects.filter(
-                team=team, company_id=company_id, is_active=True
-            ).select_related("designation")
-        )
+        members = list(_scoped_employee_queryset(request.user).select_related("designation", "team", "team__lead")[:100])
         member_ids = [m.id for m in members]
+        _, days_in_month = calendar.monthrange(year, month)
+        month_start = timezone.datetime(year, month, 1).date()
+        month_end = timezone.datetime(year, month, days_in_month).date()
 
         attendance_qs = Attendance.all_objects.filter(
             company_id=company_id,
@@ -613,41 +724,108 @@ class TeamCalendarView(APIView):
 
         att_map = {}
         for att in attendance_qs:
-            att_map.setdefault(att.employee_id, {})[att.date.isoformat()] = att.status
+            att_map.setdefault(att.employee_id, {})[att.date.isoformat()] = {
+                "status": att.status,
+                "check_in": att.check_in.strftime("%H:%M") if att.check_in else None,
+                "check_out": att.check_out.strftime("%H:%M") if att.check_out else None,
+                "is_late": att.is_late,
+                "is_remote": bool(att.check_in_location),
+                "working_hours": float(att.working_hours or 0),
+            }
+
+        leaves_qs = LeaveRequest.all_objects.filter(
+            company_id=company_id,
+            employee_id__in=member_ids,
+            status__in=[LeaveRequest.Status.PENDING, LeaveRequest.Status.MANAGER_APPROVED, LeaveRequest.Status.APPROVED],
+            from_date__lte=month_end,
+            to_date__gte=month_start,
+        ).select_related("leave_type", "employee")
+        leave_map = {}
+        for leave in leaves_qs:
+            start = max(leave.from_date, month_start)
+            end = min(leave.to_date, month_end)
+            cursor = start
+            while cursor <= end:
+                leave_map.setdefault(leave.employee_id, {}).setdefault(cursor.isoformat(), []).append({
+                    "id": leave.id,
+                    "status": leave.status,
+                    "leave_type": leave.leave_type.name,
+                    "leave_type_code": leave.leave_type.code,
+                    "days": float(leave.total_days),
+                })
+                cursor += timedelta(days=1)
+
+        holidays = list(
+            Holiday.all_objects.filter(company_id=company_id, is_active=True, date__gte=month_start, date__lte=month_end)
+            .values("id", "name", "date", "holiday_type", "department_id")
+        )
+        holiday_map = {item["date"].isoformat(): {**item, "date": item["date"].isoformat()} for item in holidays}
+        weekly_offs = _weekly_off_indexes(company)
+
+        calendar_days = []
+        for day in range(1, days_in_month + 1):
+            value = timezone.datetime(year, month, day).date()
+            calendar_days.append({
+                "date": value.isoformat(),
+                "day": day,
+                "weekday": value.weekday(),
+                "is_weekly_off": value.weekday() in weekly_offs,
+                "holiday": holiday_map.get(value.isoformat()),
+            })
 
         today = timezone.now().date()
         today_str = today.isoformat()
-        on_time, late, wfh, off = 0, 0, 0, []
+        on_time, late, wfh, remote_clockins, on_leave, not_marked, off = 0, 0, 0, 0, 0, 0, []
 
         members_data = []
         for m in members:
-            today_status = att_map.get(m.id, {}).get(today_str)
-            if today_status == "present":
+            today_att = att_map.get(m.id, {}).get(today_str)
+            today_leave = leave_map.get(m.id, {}).get(today_str, [])
+            today_status = today_att["status"] if today_att else ("leave" if today_leave else "not_marked")
+            if today_status == "present" and not today_att.get("is_late"):
                 on_time += 1
             elif today_status == "wfh":
                 wfh += 1
-            else:
+            elif today_status == "leave":
+                on_leave += 1
+            elif today_status == "not_marked":
+                not_marked += 1
                 off.append(m.full_name)
+            if today_att and today_att.get("is_late"):
+                late += 1
+            if today_att and today_att.get("is_remote"):
+                remote_clockins += 1
 
             members_data.append({
                 "id": m.id,
                 "name": m.full_name,
-                "is_self": m.id == employee.id,
+                "is_self": bool(employee and m.id == employee.id),
                 "designation": m.designation.name if m.designation else None,
+                "team": m.team.name if m.team else None,
                 "photo": m.photo.url if m.photo and m.photo.name else None,
                 "attendance": att_map.get(m.id, {}),
+                "leaves": leave_map.get(m.id, {}),
             })
 
+        team_names = sorted({m.team.name for m in members if m.team_id})
         return Response({
-            "team_name": team.name,
-            "team_lead": team.lead.full_name if team.lead else None,
+            "team_name": ", ".join(team_names[:2]) if team_names else "My Team",
+            "team_lead": employee.team.lead.full_name if employee and employee.team and employee.team.lead else None,
             "month": month,
             "year": year,
+            "calendar_days": calendar_days,
+            "holidays": holidays,
+            "weekly_off_days": weekly_offs,
             "members": members_data,
             "today_stats": {
                 "on_time": on_time,
                 "late": late,
                 "wfh": wfh,
+                "remote_clockins": remote_clockins,
+                "on_leave": on_leave,
+                "not_marked": not_marked,
+                "team_available": max(0, len(members) - on_leave - not_marked),
+                "team_total": len(members),
                 "off_today": off,
                 "all_in": len(off) == 0,
             },

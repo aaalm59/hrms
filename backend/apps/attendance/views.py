@@ -1,6 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.permissions import IsHRAdmin, IsManager
@@ -28,6 +30,11 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManager]
     queryset = Attendance.objects.none()
 
+    def get_permissions(self):
+        if self.action in ["list", "retrieve", "check_in", "check_out", "regularize", "today_summary"]:
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
         if user.is_super_admin:
@@ -41,6 +48,24 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             if not user.company_id:
                 return Attendance.all_objects.none()
             qs = Attendance.all_objects.filter(company_id=user.company_id).select_related("employee", "shift")
+            if not (user.has_role("company_admin") or user.has_role("hr_admin")):
+                employee = getattr(user, "employee_profile", None)
+                if user.has_role("manager") or user.has_role("team_lead"):
+                    employee_ids = set()
+                    if employee:
+                        employee_ids.add(employee.id)
+                        employee_ids.update(
+                            employee.reportees.filter(company_id=user.company_id, is_active=True).values_list("id", flat=True)
+                        )
+                        employee_ids.update(
+                            employee.company.employees_employee_set.filter(
+                                Q(team__lead=employee) | Q(team__reporting_manager=employee),
+                                is_active=True,
+                            ).values_list("id", flat=True)
+                        )
+                    qs = qs.filter(employee_id__in=employee_ids)
+                else:
+                    qs = qs.filter(employee=employee)
         date = self.request.query_params.get("date")
         employee_id = self.request.query_params.get("employee_id") or self.request.query_params.get("employee")
         month = self.request.query_params.get("month")  # format: YYYY-MM
@@ -65,17 +90,27 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         employee = request.user.employee_profile
         today = timezone.now().date()
+        if not employee:
+            return Response({"detail": "No employee profile linked to this user."}, status=status.HTTP_400_BAD_REQUEST)
+        shift = Shift.all_objects.filter(company=request.user.company).order_by("start_time").first()
         attendance, created = Attendance.objects.get_or_create(
             company=request.user.company,
             employee=employee,
             date=today,
-            defaults={"status": Attendance.Status.PRESENT},
+            defaults={"status": Attendance.Status.PRESENT, "shift": shift},
         )
         if not created and attendance.check_in:
             return Response({"detail": "Already checked in."}, status=status.HTTP_400_BAD_REQUEST)
         attendance.check_in = timezone.now()
         attendance.check_in_location = serializer.validated_data.get("location")
-        attendance.status = Attendance.Status.PRESENT
+        requested_status = request.data.get("status")
+        attendance.status = Attendance.Status.WORK_FROM_HOME if requested_status == Attendance.Status.WORK_FROM_HOME else Attendance.Status.PRESENT
+        if shift:
+            attendance.shift = attendance.shift or shift
+            grace_time = timezone.datetime.combine(today, shift.start_time, tzinfo=timezone.get_current_timezone()) + timezone.timedelta(minutes=shift.grace_minutes)
+            if attendance.check_in > grace_time:
+                attendance.is_late = True
+                attendance.late_minutes = int((attendance.check_in - grace_time).total_seconds() // 60)
         attendance.save()
         return Response({"detail": "Checked in successfully.", "time": attendance.check_in})
 
@@ -97,13 +132,15 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def today_summary(self, request):
         today = timezone.now().date()
-        qs = Attendance.objects.filter(company=request.user.company, date=today)
+        qs = self.get_queryset().filter(date=today)
         return Response({
             "present": qs.filter(status=Attendance.Status.PRESENT).count(),
             "absent": qs.filter(status=Attendance.Status.ABSENT).count(),
             "on_leave": qs.filter(status=Attendance.Status.LEAVE).count(),
             "wfh": qs.filter(status=Attendance.Status.WORK_FROM_HOME).count(),
             "half_day": qs.filter(status=Attendance.Status.HALF_DAY).count(),
+            "late": qs.filter(is_late=True).count(),
+            "remote_clockins": qs.filter(check_in_location__isnull=False).count(),
         })
 
     @action(detail=False, methods=["post"])

@@ -33,6 +33,7 @@ const STATUS_CLS = {
   half_day:    "bg-orange-400 text-white",
   absent:      "bg-red-100 text-red-500",
   regularized: "bg-teal-400 text-white",
+  not_marked:  "text-gray-300",
 };
 
 const LEAVE_DONUT_COLORS = ["#f87171", "#10b981"];
@@ -102,8 +103,11 @@ function QuickAction({ to, icon: Icon, label, color }) {
 
 // ─── Team Calendar ────────────────────────────────────────────────────────────
 
-function CalDot({ day, status, isWeekend, isToday }) {
-  const cls = isWeekend
+function CalDot({ day, attendance, leaves, isWeekend, isHoliday, isToday }) {
+  const status = leaves?.length ? "leave" : attendance?.status;
+  const cls = isHoliday
+    ? "bg-lime-100 text-lime-700 border border-lime-200"
+    : isWeekend
     ? "bg-amber-100 text-amber-600"
     : status
     ? STATUS_CLS[status] ?? "bg-gray-100 text-gray-500"
@@ -111,17 +115,30 @@ function CalDot({ day, status, isWeekend, isToday }) {
   return (
     <div
       className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold mx-auto select-none
-        ${cls} ${isToday ? "ring-2 ring-primary-500 ring-offset-1" : ""}`}
+        ${cls} ${attendance?.is_late ? "ring-2 ring-red-300" : ""} ${attendance?.is_remote ? "outline outline-2 outline-blue-200" : ""} ${isToday ? "ring-2 ring-primary-500 ring-offset-1" : ""}`}
+      title={[
+        attendance?.status,
+        attendance?.is_late ? "Late" : "",
+        attendance?.is_remote ? "Remote clock-in" : "",
+        leaves?.length ? leaves.map((item) => `${item.leave_type_code} ${item.status}`).join(", ") : "",
+        isHoliday ? "Holiday" : "",
+      ].filter(Boolean).join(" · ")}
     >
       {day}
     </div>
   );
 }
 
-function TeamCalendar({ members, month, year }) {
+function TeamCalendar({ members, month, year, calendarDays = [] }) {
   const today = new Date();
   const daysInMonth = getDaysInMonth(new Date(year, month - 1));
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const days = calendarDays.length
+    ? calendarDays
+    : Array.from({ length: daysInMonth }, (_, i) => {
+        const d = i + 1;
+        const value = new Date(year, month - 1, d);
+        return { day: d, date: format(value, "yyyy-MM-dd"), weekday: getDay(value), is_weekly_off: [0, 6].includes(getDay(value)) };
+      });
 
   return (
     <div className="overflow-x-auto -mx-1">
@@ -131,10 +148,10 @@ function TeamCalendar({ members, month, year }) {
             <th className="sticky left-0 bg-white z-10 text-left pl-4 pr-6 py-2 min-w-[180px]">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Member</span>
             </th>
-            {days.map((d) => {
-              const dow = getDay(new Date(year, month - 1, d));
+            {days.map((item) => {
+              const dow = getDay(parseISO(item.date));
               return (
-                <th key={d} className="text-center px-0.5 py-1.5 min-w-[32px]">
+                <th key={item.date} className="text-center px-0.5 py-1.5 min-w-[32px]">
                   <div className="text-[9px] text-gray-400 font-medium">{DAYS_SHORT[dow]}</div>
                 </th>
               );
@@ -164,19 +181,24 @@ function TeamCalendar({ members, month, year }) {
                   </div>
                 </div>
               </td>
-              {days.map((d) => {
-                const date = new Date(year, month - 1, d);
-                const dateStr = format(date, "yyyy-MM-dd");
-                const dow = getDay(date);
-                const isWknd = dow === 0 || dow === 6;
+              {days.map((item) => {
+                const date = parseISO(item.date);
                 const isToday =
                   today.getFullYear() === year &&
                   today.getMonth() === month - 1 &&
-                  today.getDate() === d;
-                const status = member.attendance?.[dateStr];
+                  today.getDate() === item.day;
+                const attendance = member.attendance?.[item.date];
+                const leaves = member.leaves?.[item.date] || [];
                 return (
-                  <td key={d} className="px-0.5 py-2 text-center">
-                    <CalDot day={d} status={status} isWeekend={isWknd} isToday={isToday} />
+                  <td key={item.date} className="px-0.5 py-2 text-center">
+                    <CalDot
+                      day={item.day}
+                      attendance={attendance}
+                      leaves={leaves}
+                      isWeekend={item.is_weekly_off}
+                      isHoliday={!!item.holiday}
+                      isToday={isToday}
+                    />
                   </td>
                 );
               })}
@@ -443,6 +465,13 @@ export default function EmployeeDashboard() {
                   <Clock className="w-3.5 h-3.5" />
                   Checked in at {dash.check_in_time}
                   {dash.working_hours_today && ` · ${dash.working_hours_today}h worked`}
+                  {dash.live_working_seconds ? ` · live ${(dash.live_working_seconds / 3600).toFixed(1)}h` : ""}
+                </p>
+              )}
+              {dash?.shift?.name && (
+                <p className="text-xs opacity-70 mt-1">
+                  Shift: {dash.shift.name} · {dash.shift.start_time} - {dash.shift.end_time}
+                  {dash.late_alert ? ` · ${dash.late_alert}` : ""}
                 </p>
               )}
             </div>
@@ -472,6 +501,14 @@ export default function EmployeeDashboard() {
             <KpiCard label="Pending Leaves" value={dash?.pending_leave_requests} icon={AlertCircle} color="red" />
             <KpiCard label="Team Members" value={dash?.team?.total_members} icon={Users} color="blue" />
             <KpiCard label="Payslips" value={dash?.recent_payslips?.length} icon={CreditCard} color="purple" />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <KpiCard label="Employees On Time" value={dash?.widgets?.employees_on_time ?? 0} icon={CheckCircle} color="green" />
+            <KpiCard label="Late Arrivals" value={dash?.widgets?.late_arrivals ?? 0} icon={Clock} color="amber" />
+            <KpiCard label="Work From Home" value={dash?.widgets?.work_from_home ?? 0} icon={Home} color="blue" />
+            <KpiCard label="Remote Clock-ins" value={dash?.widgets?.remote_clockins ?? 0} icon={MapPin} color="purple" />
+            <KpiCard label="Team Availability" value={`${dash?.widgets?.team_available ?? 0}/${dash?.widgets?.team_total ?? 0}`} icon={Users} color="blue" />
           </div>
 
           {/* Quick Actions */}
@@ -577,6 +614,39 @@ export default function EmployeeDashboard() {
               </div>
             </div>
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="card">
+              <h3 className="font-semibold text-gray-900 mb-4">Attendance Trend</h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={dash?.attendance_trend ?? []} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  <Bar dataKey="present" stackId="a" fill="#14b8a6" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="wfh" stackId="a" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="late" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="card">
+              <h3 className="font-semibold text-gray-900 mb-4">Recent Attendance</h3>
+              <div className="space-y-2 max-h-48 overflow-auto">
+                {dash?.attendance_history?.length ? dash.attendance_history.map((item) => (
+                  <div key={item.date} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-800">{item.date}</p>
+                      <p className="text-xs text-gray-400">{item.check_in || "--"} - {item.check_out || "--"} · {item.working_hours}h</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${item.is_late ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                      {item.is_late ? `Late ${item.late_minutes}m` : item.status}
+                    </span>
+                  </div>
+                )) : <p className="py-8 text-center text-sm text-gray-400">No attendance history yet</p>}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -600,7 +670,10 @@ export default function EmployeeDashboard() {
             <KpiCard label="Employees On Time today" value={todayStats.on_time ?? 0} icon={CheckCircle} color="green" />
             <KpiCard label="Late Arrivals today" value={todayStats.late ?? 0} icon={Clock} color="amber" />
             <KpiCard label="Work from Home / On Duty" value={todayStats.wfh ?? 0} icon={Home} color="blue" />
-            <KpiCard label="Off Today" value={offToday.length} icon={XCircle} color="red" />
+            <KpiCard label="Remote Clock-ins today" value={todayStats.remote_clockins ?? 0} icon={MapPin} color="purple" />
+            <KpiCard label="Team Available" value={`${todayStats.team_available ?? 0}/${todayStats.team_total ?? teamCal?.members?.length ?? 0}`} icon={Users} color="green" />
+            <KpiCard label="On Leave Today" value={todayStats.on_leave ?? 0} icon={Calendar} color="amber" />
+            <KpiCard label="Not Marked" value={todayStats.not_marked ?? offToday.length} icon={XCircle} color="red" />
           </div>
 
           {/* Team Calendar */}
@@ -640,7 +713,10 @@ export default function EmployeeDashboard() {
                 { label: "Present",  cls: "bg-teal-500" },
                 { label: "WFH",      cls: "bg-blue-500" },
                 { label: "Leave",    cls: "bg-amber-400" },
+                { label: "Holiday",  cls: "bg-lime-100 border border-lime-200" },
                 { label: "Weekend",  cls: "bg-amber-100 border border-amber-200" },
+                { label: "Remote",   cls: "bg-white border-2 border-blue-200" },
+                { label: "Late",     cls: "bg-white border-2 border-red-300" },
                 { label: "Absent",   cls: "bg-red-100" },
               ].map(({ label, cls }) => (
                 <div key={label} className="flex items-center gap-1.5">
@@ -659,7 +735,7 @@ export default function EmployeeDashboard() {
               </div>
             ) : (
               <div className="p-4">
-                <TeamCalendar members={teamCal.members} month={calMonth} year={calYear} />
+                <TeamCalendar members={teamCal.members} month={calMonth} year={calYear} calendarDays={teamCal.calendar_days} />
               </div>
             )}
           </div>
